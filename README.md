@@ -82,7 +82,7 @@ Once all containers are running, access the application using the following URLs
 | Service | URL | Description |
 |---|---|---|
 | **Frontend** | http://localhost:3000 | React SPA for Parents and Administrators |
-| **Backend API** | http://localhost:8080 | ASP.NET Core REST API |
+| **Backend API** | http://localhost:8080/swagger | ASP.NET Core REST API |
 | **Database** | `localhost:5432` | PostgreSQL Database |
 
 ### Database Configuration
