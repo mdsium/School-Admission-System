@@ -1,0 +1,32 @@
+# Build outputs
+bin/
+obj/
+dist/
+build/
+TestResults/
+
+# Dependencies
+node_modules/
+
+# IDE and Editor files
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Logs and environment
+*.log
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Operating System files
+.DS_Store
+Thumbs.db
+
+# Confidential assignment briefs (per brief §3.4 instructions)
+*.pdf
