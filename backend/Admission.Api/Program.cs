@@ -51,9 +51,9 @@ using (var scope = app.Services.CreateScope())
     for (var attempt = 1; ; attempt++)
     {
         try { await db.Database.EnsureCreatedAsync(); break; }
-        catch when (attempt < 30)
+        catch (Exception ex) when (attempt < 30)
         {
-            app.Logger.LogWarning("Database not ready (attempt {Attempt}), retrying...", attempt);
+            app.Logger.LogWarning("Database not ready (attempt {Attempt}): {Message}. Retrying...", attempt, ex.Message);
             await Task.Delay(2000);
         }
     }
