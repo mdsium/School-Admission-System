@@ -14,31 +14,38 @@ public class ApiException : Exception
     }
 }
 
-public record ClassView(string Id, string Name, int TotalSeats, int HeldSeats, int ConfirmedSeats, int AvailableSeats);
-public record HoldView(string HoldId, string ClassId, string? StudentId, string Status, DateTime ExpiresAt);
+public record ClassView(string Id, string Name, int TotalSeats, int HeldSeats, int ConfirmedSeats, int AvailableSeats, string? Shift = null);
+public record HoldView(string HoldId, string ClassId, string? StudentId, string Status, DateTime ExpiresAt, string? ClassName = null);
+
+public record AdminOverviewDto(
+    int TotalClasses,
+    int TotalShifts,
+    int TotalSeats,
+    int HeldSeats,
+    int ConfirmedSeats,
+    int AvailableSeats,
+    int TotalApplications
+);
+
+public record AdminApplicationDto(
+    string HoldId,
+    string ClassId,
+    string ClassName,
+    string Shift,
+    string StudentId,
+    string? ParentName,
+    string? ParentEmail,
+    string Status,
+    DateTime CreatedAt,
+    DateTime ExpiresAt,
+    DateTime? ConfirmedAt
+);
 
 public class AdmissionOptions
 {
     public int HoldDurationSeconds { get; set; } = 600;
 }
 
-/// <summary>
-/// Core business rules.
-///
-/// CONCURRENCY STRATEGY
-/// Every operation that can change seat availability for a class (create hold, confirm,
-/// cancel) runs in a transaction that first takes a row lock on the class row:
-///     SELECT ... FROM classes WHERE "Id" = @id FOR UPDATE
-/// Concurrent requests for the same class are therefore serialized by PostgreSQL, so the
-/// "count seats, then insert" sequence can never interleave. Different classes do not block
-/// each other. This also works when several backend instances run against one database.
-/// A partial unique index on holds is a second line of defence for the one-live-hold rule.
-///
-/// EXPIRY STRATEGY
-/// A HELD row is considered live only while ExpiresAt > now. Expiry is enforced lazily
-/// (every read/write filters on ExpiresAt) so correctness never depends on a timer. A
-/// background sweeper additionally flips stale rows to EXPIRED to keep the table tidy.
-/// </summary>
 public class AdmissionService
 {
     private readonly AppDbContext _db;
@@ -49,8 +56,6 @@ public class AdmissionService
         _db = db;
         _opt = opt;
     }
-
-    // ---------- helpers ----------
 
     private static string NewId(string prefix) => prefix + "_" + Guid.NewGuid().ToString("N")[..10];
 
@@ -64,12 +69,10 @@ public class AdmissionService
     {
         var rows = await _db.Database
             .ExecuteSqlInterpolatedAsync($"SELECT 1 FROM classes WHERE \"Id\" = {classId} FOR UPDATE", ct);
-        // ExecuteSql returns -1 for SELECT; verify existence separately.
         var exists = await _db.Classes.AsNoTracking().AnyAsync(c => c.Id == classId, ct);
         if (!exists) throw new ApiException(404, "CLASS_NOT_FOUND", "Class not found.");
     }
 
-    /// Flip any stale HELD rows of this class to EXPIRED (called while holding the class lock).
     private Task ExpireStaleAsync(string classId, DateTime now, CancellationToken ct) =>
         _db.Holds
             .Where(h => h.ClassId == classId && h.Status == HoldStatus.HELD && h.ExpiresAt <= now)
@@ -93,7 +96,7 @@ public class AdmissionService
 
     // ---------- classes ----------
 
-    public async Task<ClassView> CreateClassAsync(string? name, int totalSeats, CancellationToken ct)
+    public async Task<ClassView> CreateClassAsync(string? name, int totalSeats, CancellationToken ct, string? shift = null)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ApiException(400, "INVALID_NAME", "name is required.");
@@ -102,18 +105,58 @@ public class AdmissionService
         if (totalSeats <= 0 || totalSeats > 100_000)
             throw new ApiException(400, "INVALID_SEATS", "totalSeats must be a positive integer.");
 
-        var c = new SchoolClass { Id = NewId("c"), Name = name.Trim(), TotalSeats = totalSeats, CreatedAt = DateTime.UtcNow };
+        var finalName = name.Trim();
+        var finalShift = string.IsNullOrWhiteSpace(shift) ? "Morning Shift" : shift.Trim();
+
+        // If shift was embedded in name like "Class 6 - Morning Shift", normalize
+        if (string.IsNullOrWhiteSpace(shift) && finalName.Contains(" - "))
+        {
+            var parts = finalName.Split(" - ", 2);
+            finalName = parts[0].Trim();
+            finalShift = parts[1].Trim();
+        }
+
+        var c = new SchoolClass
+        {
+            Id = NewId("c"),
+            Name = finalName,
+            Shift = finalShift,
+            TotalSeats = totalSeats,
+            CreatedAt = DateTime.UtcNow
+        };
         _db.Classes.Add(c);
         await _db.SaveChangesAsync(ct);
-        return new ClassView(c.Id, c.Name, c.TotalSeats, 0, 0, c.TotalSeats);
+        return new ClassView(c.Id, c.DisplayName, c.TotalSeats, 0, 0, c.TotalSeats, c.Shift);
+    }
+
+    public async Task<ClassView> UpdateClassAsync(string classId, string? name, string? shift, int totalSeats, CancellationToken ct)
+    {
+        if (totalSeats <= 0 || totalSeats > 100_000)
+            throw new ApiException(400, "INVALID_SEATS", "totalSeats must be a positive integer.");
+
+        var c = await _db.Classes.FirstOrDefaultAsync(x => x.Id == classId, ct)
+                ?? throw new ApiException(404, "CLASS_NOT_FOUND", "Class not found.");
+
+        if (!string.IsNullOrWhiteSpace(name))
+            c.Name = name.Trim();
+        if (!string.IsNullOrWhiteSpace(shift))
+            c.Shift = shift.Trim();
+
+        // Ensure current active seats don't exceed new capacity
+        var (held, conf) = await CountAsync(classId, DateTime.UtcNow, ct);
+        if (held + conf > totalSeats)
+            throw new ApiException(409, "SEAT_LIMIT_CONFLICT", $"Cannot reduce seats to {totalSeats} because {held + conf} seats are currently active ({conf} confirmed, {held} held).");
+
+        c.TotalSeats = totalSeats;
+        await _db.SaveChangesAsync(ct);
+        return new ClassView(c.Id, c.DisplayName, c.TotalSeats, held, conf, Math.Max(0, c.TotalSeats - held - conf), c.Shift);
     }
 
     public async Task<List<ClassView>> ListClassesAsync(CancellationToken ct)
     {
         var now = DateTime.UtcNow;
-        var classes = await _db.Classes.AsNoTracking().OrderBy(c => c.CreatedAt).ToListAsync(ct);
+        var classes = await _db.Classes.AsNoTracking().Where(c => c.IsActive).OrderBy(c => c.CreatedAt).ToListAsync(ct);
 
-        // One grouped query for all classes (no N+1).
         var counts = await _db.Holds.AsNoTracking()
             .Where(h => h.Status == HoldStatus.CONFIRMED || (h.Status == HoldStatus.HELD && h.ExpiresAt > now))
             .GroupBy(h => new { h.ClassId, h.Status })
@@ -124,7 +167,7 @@ public class AdmissionService
         {
             var held = counts.FirstOrDefault(x => x.ClassId == c.Id && x.Status == HoldStatus.HELD)?.Count ?? 0;
             var conf = counts.FirstOrDefault(x => x.ClassId == c.Id && x.Status == HoldStatus.CONFIRMED)?.Count ?? 0;
-            return new ClassView(c.Id, c.Name, c.TotalSeats, held, conf, Math.Max(0, c.TotalSeats - held - conf));
+            return new ClassView(c.Id, c.DisplayName, c.TotalSeats, held, conf, Math.Max(0, c.TotalSeats - held - conf), c.Shift);
         }).ToList();
     }
 
@@ -133,12 +176,12 @@ public class AdmissionService
         var c = await _db.Classes.AsNoTracking().FirstOrDefaultAsync(x => x.Id == classId, ct)
                 ?? throw new ApiException(404, "CLASS_NOT_FOUND", "Class not found.");
         var (held, conf) = await CountAsync(classId, DateTime.UtcNow, ct);
-        return new ClassView(c.Id, c.Name, c.TotalSeats, held, conf, Math.Max(0, c.TotalSeats - held - conf));
+        return new ClassView(c.Id, c.DisplayName, c.TotalSeats, held, conf, Math.Max(0, c.TotalSeats - held - conf), c.Shift);
     }
 
     // ---------- holds ----------
 
-    public async Task<HoldView> CreateHoldAsync(string classId, string? studentId, CancellationToken ct)
+    public async Task<HoldView> CreateHoldAsync(string classId, string? studentId, CancellationToken ct, string? userId = null)
     {
         ValidateStudentId(studentId);
 
@@ -166,6 +209,7 @@ public class AdmissionService
                 Id = NewId("h"),
                 ClassId = classId,
                 StudentId = studentId!,
+                UserId = userId,
                 Status = HoldStatus.HELD,
                 CreatedAt = now,
                 ExpiresAt = now.AddSeconds(_opt.HoldDurationSeconds)
@@ -173,7 +217,7 @@ public class AdmissionService
             _db.Holds.Add(hold);
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
-            return new HoldView(hold.Id, hold.ClassId, hold.StudentId, "HELD", hold.ExpiresAt);
+            return new HoldView(hold.Id, hold.ClassId, hold.StudentId, "HELD", hold.ExpiresAt, cls.DisplayName);
         }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
         {
@@ -183,9 +227,11 @@ public class AdmissionService
 
     public async Task<HoldView> GetHoldAsync(string holdId, CancellationToken ct)
     {
-        var h = await _db.Holds.AsNoTracking().FirstOrDefaultAsync(x => x.Id == holdId, ct)
+        var h = await _db.Holds.AsNoTracking()
+            .Include(x => x.Class)
+            .FirstOrDefaultAsync(x => x.Id == holdId, ct)
                 ?? throw new ApiException(404, "HOLD_NOT_FOUND", "Hold not found.");
-        return new HoldView(h.Id, h.ClassId, null, EffectiveStatus(h, DateTime.UtcNow), h.ExpiresAt);
+        return new HoldView(h.Id, h.ClassId, null, EffectiveStatus(h, DateTime.UtcNow), h.ExpiresAt, h.Class?.DisplayName);
     }
 
     public async Task<HoldView> ConfirmHoldAsync(string holdId, string? studentId, CancellationToken ct)
@@ -199,7 +245,7 @@ public class AdmissionService
         await LockClassAsync(classId, ct);
         var now = DateTime.UtcNow;
 
-        var hold = await _db.Holds.FirstOrDefaultAsync(h => h.Id == holdId, ct)
+        var hold = await _db.Holds.Include(h => h.Class).FirstOrDefaultAsync(h => h.Id == holdId, ct)
                    ?? throw new ApiException(404, "HOLD_NOT_FOUND", "Hold not found.");
 
         if (hold.StudentId != studentId)
@@ -219,7 +265,7 @@ public class AdmissionService
         hold.ConfirmedAt = now;
         await _db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
-        return new HoldView(hold.Id, hold.ClassId, hold.StudentId, "CONFIRMED", hold.ExpiresAt);
+        return new HoldView(hold.Id, hold.ClassId, hold.StudentId, "CONFIRMED", hold.ExpiresAt, hold.Class?.DisplayName);
     }
 
     public async Task CancelHoldAsync(string holdId, string? studentId, CancellationToken ct)
@@ -239,7 +285,6 @@ public class AdmissionService
         if (hold.Status == HoldStatus.CONFIRMED)
             throw new ApiException(409, "ALREADY_CONFIRMED", "A confirmed seat cannot be cancelled.");
 
-        // Cancelling an already EXPIRED/CANCELLED hold is idempotent (still 204).
         if (hold.Status == HoldStatus.HELD)
         {
             hold.Status = HoldStatus.CANCELLED;
@@ -248,27 +293,109 @@ public class AdmissionService
         await tx.CommitAsync(ct);
     }
 
-    public async Task<List<object>> MyHoldsAsync(string? studentId, CancellationToken ct)
+    public async Task<List<object>> MyHoldsAsync(string? studentId, CancellationToken ct, string? userId = null)
     {
         ValidateStudentId(studentId);
         var now = DateTime.UtcNow;
-        var rows = await _db.Holds.AsNoTracking()
-            .Where(h => h.StudentId == studentId)
+
+        var query = _db.Holds.AsNoTracking().Include(h => h.Class).AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(userId))
+        {
+            query = query.Where(h => h.StudentId == studentId || h.UserId == userId);
+        }
+        else
+        {
+            query = query.Where(h => h.StudentId == studentId);
+        }
+
+        var rows = await query
             .OrderByDescending(h => h.CreatedAt)
-            .Select(h => new { h, ClassName = h.Class!.Name })
             .ToListAsync(ct);
 
-        return rows.Select(r => (object)new
+        return rows.Select(h => (object)new
         {
-            holdId = r.h.Id,
-            classId = r.h.ClassId,
-            className = r.ClassName,
-            status = EffectiveStatus(r.h, now),
-            expiresAt = r.h.ExpiresAt
+            holdId = h.Id,
+            classId = h.ClassId,
+            className = h.Class?.DisplayName ?? "Unknown Class",
+            shift = h.Class?.Shift ?? "Morning Shift",
+            studentId = h.StudentId,
+            status = EffectiveStatus(h, now),
+            expiresAt = h.ExpiresAt,
+            createdAt = h.CreatedAt,
+            confirmedAt = h.ConfirmedAt
         }).ToList();
     }
 
-    /// Persist expiry for stale rows (housekeeping only; correctness does not depend on this).
+    // ---------- admin features ----------
+
+    public async Task<AdminOverviewDto> AdminOverviewAsync(CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        var classes = await _db.Classes.AsNoTracking().ToListAsync(ct);
+
+        var counts = await _db.Holds.AsNoTracking()
+            .GroupBy(h => new
+            {
+                Status = h.Status == HoldStatus.HELD && h.ExpiresAt <= now ? HoldStatus.EXPIRED : h.Status
+            })
+            .Select(g => new { Status = g.Key.Status, Count = g.Count() })
+            .ToListAsync(ct);
+
+        var totalSeats = classes.Sum(c => c.TotalSeats);
+        var heldSeats = counts.FirstOrDefault(x => x.Status == HoldStatus.HELD)?.Count ?? 0;
+        var confSeats = counts.FirstOrDefault(x => x.Status == HoldStatus.CONFIRMED)?.Count ?? 0;
+        var totalShifts = classes.Select(c => c.Shift).Distinct().Count();
+        var totalApplications = await _db.Holds.CountAsync(ct);
+
+        return new AdminOverviewDto(
+            TotalClasses: classes.Count,
+            TotalShifts: totalShifts,
+            TotalSeats: totalSeats,
+            HeldSeats: heldSeats,
+            ConfirmedSeats: confSeats,
+            AvailableSeats: Math.Max(0, totalSeats - heldSeats - confSeats),
+            TotalApplications: totalApplications
+        );
+    }
+
+    public async Task<List<AdminApplicationDto>> AdminListApplicationsAsync(string? statusFilter, CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        var query = _db.Holds.AsNoTracking()
+            .Include(h => h.Class)
+            .Include(h => h.User)
+            .OrderByDescending(h => h.CreatedAt)
+            .AsQueryable();
+
+        var list = await query.ToListAsync(ct);
+
+        var result = list.Select(h =>
+        {
+            var effective = EffectiveStatus(h, now);
+            return new AdminApplicationDto(
+                HoldId: h.Id,
+                ClassId: h.ClassId,
+                ClassName: h.Class?.Name ?? "Unknown",
+                Shift: h.Class?.Shift ?? "Morning Shift",
+                StudentId: h.StudentId,
+                ParentName: h.User?.FullName,
+                ParentEmail: h.User?.Email,
+                Status: effective,
+                CreatedAt: h.CreatedAt,
+                ExpiresAt: h.ExpiresAt,
+                ConfirmedAt: h.ConfirmedAt
+            );
+        });
+
+        if (!string.IsNullOrWhiteSpace(statusFilter) && statusFilter != "ALL")
+        {
+            result = result.Where(a => a.Status.Equals(statusFilter, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return result.ToList();
+    }
+
     public Task<int> SweepExpiredAsync(CancellationToken ct) =>
         _db.Holds.Where(h => h.Status == HoldStatus.HELD && h.ExpiresAt <= DateTime.UtcNow)
             .ExecuteUpdateAsync(s => s.SetProperty(h => h.Status, HoldStatus.EXPIRED), ct);

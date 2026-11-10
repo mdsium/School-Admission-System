@@ -14,6 +14,15 @@ vi.mock("./api", async (orig) => {
       confirm: vi.fn(),
       cancel: vi.fn(),
       myHolds: vi.fn(),
+      login: vi.fn(),
+      register: vi.fn(),
+      getMe: vi.fn(),
+      changePassword: vi.fn(),
+      adminOverview: vi.fn(),
+      adminClasses: vi.fn(),
+      adminCreateClass: vi.fn(),
+      adminUpdateClass: vi.fn(),
+      adminApplications: vi.fn(),
     },
   };
 });
@@ -78,5 +87,32 @@ describe("School Admission Frontend", () => {
     expect(screen.getByText(/নতুন Class ও Shift তৈরি/)).toBeInTheDocument();
     const createBtn = screen.getByText("Class তৈরি করুন");
     expect(createBtn).toBeDisabled();
+  });
+
+  it("navigates to login view and supports demo admin auto-fill", async () => {
+    (api.listClasses as any).mockResolvedValue([]);
+    render(<App />);
+
+    const loginBtn = screen.getByText(/লগইন \(Login\)/);
+    fireEvent.click(loginBtn);
+
+    expect(screen.getByText("🔑 সিস্টেমে লগইন করুন")).toBeInTheDocument();
+
+    const autoFillBtn = screen.getByText("অটো-ফিল");
+    fireEvent.click(autoFillBtn);
+
+    const usernameInput = screen.getByPlaceholderText(/যেমন: admin বা parent@example.com/) as HTMLInputElement;
+    expect(usernameInput.value).toBe("admin");
+  });
+
+  it("navigates to registration view for parents", async () => {
+    (api.listClasses as any).mockResolvedValue([]);
+    render(<App />);
+
+    const registerBtn = screen.getByText(/রেজিস্ট্রেশন \(Parent\)/);
+    fireEvent.click(registerBtn);
+
+    expect(screen.getByText("📝 অভিভাবক রেজিস্ট্রেশন")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("parent@example.com")).toBeInTheDocument();
   });
 });
