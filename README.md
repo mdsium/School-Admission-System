@@ -1,6 +1,6 @@
 # School Admission Management System (অনলাইন স্কুল ভর্তি ব্যবস্থা)
 
-An enterprise-ready, high-concurrency online admission system designed for private schools where seats are allocated strictly on a **"First-Come, First-Served"** basis with **time-limited seat holds**, role-based authentication (**Parent & Administrator**), and real-time dashboard analytics.
+An enterprise-ready, high-concurrency online admission system designed for private schools. The system allocates seats strictly on a **First-Come, First-Served (FCFS)** basis with time-limited seat holds, role-based authentication (Parent & Administrator), and real-time dashboard analytics.
 
 Developed as part of the **Assistant Software Engineer Recruitment** take-home assignment for **Onnorokom Projukti Limited**.
 
@@ -8,10 +8,15 @@ Developed as part of the **Assistant Software Engineer Recruitment** take-home a
 
 ## 🛠️ Technology Stack
 
-- **Backend**: C# (.NET 8 Minimal API, Entity Framework Core with Npgsql, JWT Bearer Authentication, ASP.NET Core PasswordHasher)
-- **Database**: PostgreSQL 16 (Pessimistic row locking `SELECT ... FOR UPDATE`, partial unique indexes, persistent volume)
-- **Frontend**: React 18 + TypeScript + Vite (Responsive Bangla & English UI, real-time countdown, automatic polling, admission slip modal, parent & admin dashboards)
-- **Containerization**: Docker & Docker Compose (Multi-stage production builds, persistent storage)
+| Component | Technology |
+|---|---|
+| **Backend** | C# (.NET 8 Minimal API, Entity Framework Core, Npgsql) |
+| **Database** | PostgreSQL 16 |
+| **Concurrency Control** | Pessimistic Row Locking (`SELECT ... FOR UPDATE`), Partial Unique Indexes |
+| **Frontend** | React 18, TypeScript, Vite |
+| **UI Features** | Responsive Bangla & English UI, Real-time Countdown, Automatic Polling, Admission Slip Modal |
+| **Containerization** | Docker & Docker Compose |
+| **Storage** | PostgreSQL Persistent Volume |
 
 ---
 
@@ -19,159 +24,385 @@ Developed as part of the **Assistant Software Engineer Recruitment** take-home a
 
 | Feature | Parent (অভিভাবক) | Administrator (স্কুল অ্যাডমিন) |
 |---|---|---|
-| **Registration** | ✅ পাবলিক রেজিস্ট্রেশন উন্মুক্ত | ❌ পাবলিক রেজিস্ট্রেশন বন্ধ (অটো সিডিং দ্বারা তৈরি) |
-| **Login** | ✅ ইউজারনেম/ইমেইল ও পাসওয়ার্ড | ✅ সুরক্ষিত অ্যাডমিন লগইন |
-| **Dashboard** | 🏠 Parent Dashboard (আবেদন সারাংশ ও রশিদ) | 📊 Admin Dashboard (KPI মেট্রিক্স ও রিয়েল-টাইম পরিসংখ্যান) |
-| **Manage Classes** | ❌ অনুমতি নেই | ✅ ক্লাস তৈরি, এডিট ও আসন কোটা নির্ধারণ |
-| **Manage Shifts** | ❌ অনুমতি নেই | ✅ Morning / Day / Evening শিফট তৈরি ও আসন বণ্টন |
-| **Apply for Admission** | ✅ ১৭-ডিজিটের জন্ম নিবন্ধন দিয়ে আবেদন | ✅ পরিচালনা ও তদারকি |
-| **Seat Holds & Countdown** | ✅ রিয়েল-টাইম টাইমার ও ফি পরিশোধ | ✅ সকল সক্রিয় ও মেয়াদোত্তীর্ণ হোল্ড পর্যবেক্ষণ |
-| **Manage Admissions** | 🎓 নিজের আবেদনসমূহ পরিচালনা | 📑 সকল আবেদন ও শিক্ষার্থীর বিস্তারিত তথ্য |
+| **Registration** | ✅ Public registration | ❌ Created through database seeding |
+| **Login** | ✅ Username/email and password | ✅ Secure admin login |
+| **Dashboard** | 🏠 Parent dashboard (applications and receipts) | 📊 Admin dashboard (KPIs and real-time statistics) |
+| **Manage Classes** | ❌ No permission | ✅ Create, edit, and configure seat quotas |
+| **Manage Shifts** | ❌ No permission | ✅ Create Morning, Day, and Evening shifts |
+| **Apply for Admission** | ✅ Apply using a 17-digit birth registration number | ✅ Manage and monitor applications |
+| **Seat Holds & Countdown** | ✅ Real-time timer and fee payment simulation | ✅ Monitor active and expired holds |
+| **Manage Admissions** | 🎓 Manage personal applications | 📑 View all applications and student details |
 
-### 🔐 Initial Admin Account (Seeded in Database)
-- **Username**: `admin`
-- **Default Password**: `1234`
-- **Role**: `Admin`
-- **Security Policy**: পাসওয়ার্ডটি ডাটাবেজে সিকিউর হ্যাশ (PBKDF2-HMAC-SHA512) আকারে সংরক্ষিত থাকে। প্রথমবার লগইনের পর সিস্টেমে প্রবেশ করার জন্য **ডিফল্ট পাসওয়ার্ড পরিবর্তন বাধ্যতামূলক** (`mustChangePassword: true` পলিসি দ্বারা এনফোর্সড)।
+---
+
+## 🔐 Initial Administrator Account
+
+The initial administrator account is automatically created through database seeding.
+
+| Property | Value |
+|---|---|
+| **Username** | `admin` |
+| **Default Password** | `1234` |
+| **Role** | `Admin` |
+
+### Security Policy
+
+- Passwords are stored as secure hashes using **PBKDF2-HMAC-SHA512**.
+- The administrator must change the default password after the first login.
+- The `mustChangePassword: true` policy enforces the mandatory password update.
 
 ---
 
 ## 🚀 Quick Start with Docker
 
-The entire stack runs with a single command:
+The entire application stack can be started with a single command.
+
+### Prerequisites
+
+- Docker Desktop or Docker Engine
+- Docker Compose
+
+### 1. Clone the Repository
+
+```bash
+git clone <YOUR_REPOSITORY_URL>
+cd <YOUR_PROJECT_DIRECTORY>
+```
+
+### 2. Start the Application
 
 ```bash
 docker compose up --build
 ```
 
-Once running, access the services:
+### 3. Access the Services
+
+Once all containers are running, access the application using the following URLs:
 
 | Service | URL | Description |
 |---|---|---|
-| **Frontend** | [http://localhost:3000](http://localhost:3000) | React SPA for Parents & School Admin |
-| **Backend API** | [http://localhost:8080](http://localhost:8080) | ASP.NET Core REST API |
-| **Database** | `localhost:5432` | PostgreSQL (Database: `admission`, User/Password: `postgres`) |
+| **Frontend** | http://localhost:3000 | React SPA for Parents and Administrators |
+| **Backend API** | http://localhost:8080 | ASP.NET Core REST API |
+| **Database** | `localhost:5432` | PostgreSQL Database |
 
-> [!NOTE]
-> All application data is preserved across container restarts (`docker compose down` and subsequent `docker compose up`) using the named volume `school_admission_pgdata`.
+### Database Configuration
+
+| Property | Value |
+|---|---|
+| Host | `localhost` |
+| Port | `5432` |
+| Database | `admission` |
+| Username | `postgres` |
+| Password | `postgres` |
+
+> **Note:** Application data is preserved across container restarts using the named Docker volume `school_admission_pgdata`.
+>
+> Running `docker compose down` does not delete the named volume. However, `docker compose down -v` will remove it and delete the persisted database data.
 
 ---
 
 ## ⚙️ Environment Variables & Configuration
 
-The application is fully configurable through environment variables:
+The application supports environment-based configuration.
 
 | Variable | Target Service | Default Value | Description |
 |---|---|---|---|
-| `HOLD_DURATION_SECONDS` | Backend | `600` (10 mins) | Time in seconds for temporary seat holds |
+| `HOLD_DURATION_SECONDS` | Backend | `600` | Temporary seat hold duration (10 minutes) |
 | `DB_CONNECTION_STRING` | Backend | `Host=db;Port=5432;...` | PostgreSQL connection string |
 | `CORS_ORIGINS` | Backend | `http://localhost:3000,http://localhost:5173` | Allowed browser origins |
-| `JWT_SECRET` | Backend | Auto-generated 64-char key | Secret key for signing authentication tokens |
-| `API_URL` | Frontend | `http://localhost:8080` | Backend API URL used by the client browser |
+| `JWT_SECRET` | Backend | Auto-generated 64-character key | Secret key for signing JWT tokens |
+| `API_URL` | Frontend | `http://localhost:8080` | Backend API URL used by the browser |
 
-### Quick Expiry Demo:
-To test the hold expiration and UI timer with a 30-second hold duration:
+### Quick Expiry Demo
+
+To test the temporary seat hold expiration feature with a 30-second duration:
+
+**Linux / macOS:**
+
 ```bash
 HOLD_DURATION_SECONDS=30 docker compose up --build
 ```
 
----
+**Windows PowerShell:**
 
-## 🏛️ System Architecture & Concurrency Strategy
-
+```powershell
+$env:HOLD_DURATION_SECONDS="30"
+docker compose up --build
 ```
-┌─────────────────────────┐       HTTP / JSON        ┌──────────────────────────────────┐        SQL         ┌─────────────────────────┐
-│       React 18 SPA      │ ───────────────────────> │    ASP.NET Core Web API (:8080)  │ ─────────────────> │      PostgreSQL 16      │
-│  - Parent & Admin Dash  │   Header: X-Student-Id   │    (Minimal APIs + EF Core + JWT)│   Row Locking &    │  - classes table        │
-│  - 17-digit Student ID  │   Header: Authorization  │    - AuthService                 │   Transactions     │  - holds table          │
-│  - Live Seat Polling    │ <─────────────────────── │    - AdmissionService            │                    │  - users table          │
-│  - Real-Time Countdown  │                          │    - ExpirySweeper (Background)  │ <───────────────── │  - Partial Unique Index │
-└─────────────────────────┘                          └──────────────────────────────────┘                    └─────────────────────────┘
-```
-
-### 1. Zero Overselling Guarantee (High Concurrency)
-- When thousands of parents apply simultaneously, all seat mutations (`CreateHold`, `ConfirmHold`, `CancelHold`) run inside an explicit transaction with a row-level lock:
-  ```sql
-  SELECT 1 FROM classes WHERE "Id" = @classId FOR UPDATE;
-  ```
-- **Serialization by PostgreSQL**: PostgreSQL serializes all writes for the same class. The sequence `count current live seats -> compare with totalSeats -> insert hold` cannot interleave with competing requests.
-- **Multi-Process Concurrency (Bonus)**: Even if multiple backend instances run on different ports against the same database, the lock resides inside PostgreSQL engine memory, ensuring absolute safety across all instances.
-- **Partial Unique Index**:
-  ```sql
-  CREATE UNIQUE INDEX ux_holds_one_live_per_student_class 
-  ON holds ("ClassId", "StudentId") 
-  WHERE "Status" IN ('HELD', 'CONFIRMED');
-  ```
-  Guarantees that a student can never hold or confirm more than one seat per class at the same time.
-
-### 2. Time-Independent Expiry Strategy
-- A hold is considered live only if `Status == HELD` and `ExpiresAt > now_utc`.
-- Every seat count and confirmation checks this condition in real-time. Thus, expired seats are released the exact millisecond `ExpiresAt` passes, without requiring any manual API calls or dependent timers.
-- A hosted background service (`ExpirySweeper`) periodically marks stale rows as `EXPIRED` for clean database hygiene.
 
 ---
 
-## 📡 REST API Contract
+## 🏛️ System Architecture
 
-All endpoints speak JSON. 
+The application follows a three-tier architecture.
+
+```text
+┌─────────────────────────┐
+│       React 18 SPA      │
+│                         │
+│  - Parent Dashboard     │
+│  - Admin Dashboard      │
+│  - 17-Digit Student ID  │
+│  - Live Seat Polling    │
+│  - Real-Time Countdown  │
+└────────────┬────────────┘
+             │ HTTP / JSON
+             ▼
+┌──────────────────────────────────┐
+│      ASP.NET Core Web API        │
+│             (:8080)              │
+│                                  │
+│  - Minimal APIs                  │
+│  - JWT Authentication            │
+│  - AuthService                   │
+│  - AdmissionService              │
+│  - ExpirySweeper                 │
+└────────────┬─────────────────────┘
+             │ SQL
+             ▼
+┌─────────────────────────┐
+│      PostgreSQL 16      │
+│                         │
+│  - Classes Table        │
+│  - Holds Table          │
+│  - Users Table          │
+│  - Row-Level Locking    │
+│  - Partial Unique Index │
+└─────────────────────────┘
+```
+
+---
+
+## 🔒 Concurrency & Seat Allocation Strategy
+
+### 1. Zero Overselling Guarantee
+
+The system uses PostgreSQL pessimistic row-level locking to prevent multiple parents from acquiring the same available seat.
+
+When multiple parents apply simultaneously, all seat-related operations (`CreateHold`, `ConfirmHold`, and `CancelHold`) execute inside explicit database transactions.
+
+The system locks the relevant class row:
+
+```sql
+SELECT 1
+FROM classes
+WHERE "Id" = @classId
+FOR UPDATE;
+```
+
+**How it works:**
+
+1. A transaction acquires a row-level lock on the selected class.
+2. The system counts currently active holds and confirmed admissions.
+3. Available seats are calculated against the total seat capacity.
+4. If a seat is available, a new hold is created.
+5. The transaction commits and releases the lock.
+6. Other concurrent transactions proceed sequentially.
+
+**Benefits:**
+
+- Prevents seat overselling.
+- Ensures consistent seat allocation.
+- Supports high-concurrency admission requests.
+- Works across multiple backend instances connected to the same PostgreSQL database.
+
+### 2. Partial Unique Index
+
+A partial unique index prevents a student from holding or confirming multiple seats in the same class simultaneously.
+
+```sql
+CREATE UNIQUE INDEX ux_holds_one_live_per_student_class
+ON holds ("ClassId", "StudentId")
+WHERE "Status" IN ('HELD', 'CONFIRMED');
+```
+
+This provides an additional database-level integrity guarantee.
+
+### 3. Time-Independent Expiry Strategy
+
+A temporary seat hold is considered active only when:
+
+```csharp
+Status == "HELD" && ExpiresAt > DateTime.UtcNow
+```
+
+**Expiry handling:**
+
+- Seat availability is calculated using the actual expiration timestamp.
+- Expired holds no longer occupy seats.
+- Confirmation checks the expiration timestamp before accepting an admission.
+- The hosted background service `ExpirySweeper` periodically updates expired records to `EXPIRED`.
+
+This approach ensures that seat availability does not depend on the background service running at the exact expiration time.
+
+---
+
+## 📡 REST API Documentation
+
+All API endpoints communicate using JSON.
 
 ### 1. Authentication Endpoints
-| Method | Path | Access | Description |
+
+| Method | Endpoint | Access | Description |
 |---|---|---|---|
-| `POST` | `/api/auth/register` | Public | Register a new Parent user (`fullName`, `username`, `email`, `password`) |
-| `POST` | `/api/auth/login` | Public | Log in with credentials (`username`, `password`), returns JWT and user profile |
-| `GET` | `/api/auth/me` | Authenticated | Get current authenticated user details |
-| `POST` | `/api/auth/change-password` | Authenticated | Change password and clear `mustChangePassword` flag |
+| `POST` | `/api/auth/register` | Public | Register a new parent |
+| `POST` | `/api/auth/login` | Public | Authenticate using username and password |
+| `GET` | `/api/auth/me` | Authenticated | Retrieve current user information |
+| `POST` | `/api/auth/change-password` | Authenticated | Change password and clear `mustChangePassword` |
 
-### 2. Administrator Endpoints (Requires Admin Role)
-| Method | Path | Description |
+**Registration payload:**
+
+```json
+{
+  "fullName": "Parent Name",
+  "username": "parent123",
+  "email": "parent@example.com",
+  "password": "SecurePassword123"
+}
+```
+
+**Login payload:**
+
+```json
+{
+  "username": "admin",
+  "password": "1234"
+}
+```
+
+### 2. Administrator Endpoints
+
+All administrator endpoints require authentication and the `Admin` role.
+
+| Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/api/admin/overview` | Dashboard summary (total classes, shifts, seats, holds, confirmed, available) |
-| `GET` | `/api/admin/classes` | List all classes with shift and capacity details |
-| `POST` | `/api/admin/classes` | Create new class with Morning / Day / Evening shift and seats |
-| `PUT` | `/api/admin/classes/{classId}` | Edit class name, shift, or update seat capacity |
-| `GET` | `/api/admin/applications` | View all applications with optional status filter (`HELD`, `CONFIRMED`, `EXPIRED`, `CANCELLED`) |
+| `GET` | `/api/admin/overview` | Dashboard KPIs and admission statistics |
+| `GET` | `/api/admin/classes` | List all classes and seat information |
+| `POST` | `/api/admin/classes` | Create a class with shifts and seat capacity |
+| `PUT` | `/api/admin/classes/{classId}` | Update class details and seat capacity |
+| `GET` | `/api/admin/applications` | View all applications with optional status filters |
 
-### 3. Parent & Public Admission Contract (§1.4)
-| # | Method | Path | Required Header | Description |
+**Supported application status filters:**
+
+- `HELD`
+- `CONFIRMED`
+- `EXPIRED`
+- `CANCELLED`
+
+### 3. Parent & Public Admission Endpoints
+
+| # | Method | Endpoint | Required Header | Description |
 |---|---|---|---|---|
-| 1 | `POST` | `/classes` | — | Create a new class/shift (`{ name, totalSeats }`) |
-| 2 | `GET` | `/classes` | — | List all classes with `heldSeats`, `confirmedSeats`, `availableSeats` |
-| 3 | `GET` | `/classes/{classId}` | — | Get single class seat status |
-| 4 | `POST` | `/classes/{classId}/holds` | `X-Student-Id` | Apply for a class seat (returns 201 or 409 if full/duplicate) |
-| 5 | `GET` | `/holds/{holdId}` | — | Get hold details (`HELD`, `CONFIRMED`, `EXPIRED`, `CANCELLED`) |
-| 6 | `POST` | `/holds/{holdId}/confirm` | `X-Student-Id` | Confirm admission (simulates fee payment) |
-| 7 | `DELETE` | `/holds/{holdId}` | `X-Student-Id` | Cancel application (204 No Content) |
-| 8 | `GET` | `/me/holds` | `X-Student-Id` | List all applications belonging to the student |
+| 1 | `GET` | `/classes` | — | List classes with seat availability |
+| 2 | `GET` | `/classes/{classId}` | — | Retrieve individual class details |
+| 3 | `POST` | `/classes/{classId}/holds` | `X-Student-Id` | Apply for a temporary seat hold |
+| 4 | `GET` | `/holds/{holdId}` | — | Retrieve hold information and status |
+| 5 | `POST` | `/holds/{holdId}/confirm` | `X-Student-Id` | Confirm admission (simulated payment) |
+| 6 | `DELETE` | `/holds/{holdId}` | `X-Student-Id` | Cancel an application |
+| 7 | `GET` | `/me/holds` | `X-Student-Id` | Retrieve all student applications |
+
+**Important:** The parent admission flow uses a 17-digit birth registration number.
+
+**Note:** The parent-facing admission endpoints above reflect the documented admission contract. Class creation is handled through the administrator endpoints.
 
 ---
 
 ## 🧪 Automated Testing
 
-### 1. Backend Tests (.NET 8 / xUnit)
-The backend test suite includes:
-- **Concurrency Integration Tests**: Simulates parallel requests contending for limited seats against PostgreSQL to prove zero overselling.
-- **Domain & Auth Unit Tests**: 18 unit tests covering 17-digit student ID validation, seat math calculations, password hashing, mandatory admin password change, parent role enforcement, and shift display formatting.
+The project includes automated backend and frontend test suites.
 
-To run the backend tests:
+### 1. Backend Tests (.NET 8 / xUnit)
+
+The backend test suite includes:
+
+**Concurrency Integration Tests**
+- Simulates parallel admission requests against limited seat capacity.
+- Verifies that concurrent requests cannot oversell available seats.
+- Tests database-level concurrency behavior using PostgreSQL.
+
+**Domain & Authentication Unit Tests**
+
+18 unit tests cover:
+
+- 17-digit student ID validation.
+- Seat availability calculations.
+- Password hashing.
+- Mandatory administrator password change.
+- Parent role enforcement.
+- Shift display formatting.
+
+**Run Backend Tests:**
+
 ```bash
-# Run domain & auth unit tests:
 dotnet test backend/Admission.Tests/Admission.Tests.csproj --filter "FullyQualifiedName~DomainUnitTests"
 ```
 
 ### 2. Frontend Tests (React 18 / Vitest)
-The frontend test suite uses **Vitest** and **React Testing Library** to verify:
-- Class listing and seat availability display.
-- Disabling apply button when a class has 0 seats available.
-- 17-digit student birth registration number validation.
-- User-friendly Bengali error rendering and retry recovery when backend is offline.
-- Admin class creation form validation.
-- Login and demo credential auto-fill.
-- Parent registration form.
 
-To run frontend tests:
+The frontend test suite uses **Vitest** and **React Testing Library**.
+
+Test coverage includes:
+
+- Class listing and seat availability display.
+- Disabling the Apply button when no seats are available.
+- 17-digit birth registration number validation.
+- Bengali error message rendering.
+- Retry recovery when the backend is offline.
+- Administrator class creation form validation.
+- Login and demo credential auto-fill.
+- Parent registration form validation.
+
+**Run Frontend Tests:**
+
 ```bash
 npm --prefix frontend test -- --run
 ```
-#   S c h o o l - A d m i s s i o n - S y s t e m  
- 
+
+---
+
+## 📁 Project Structure
+
+```text
+School-Admission-Management-System/
+│
+├── backend/
+│   ├── Admission.API/
+│   ├── Admission.Tests/
+│   └── ...
+│
+├── frontend/
+│   ├── src/
+│   ├── public/
+│   ├── package.json
+│   └── ...
+│
+├── docker-compose.yml
+├── README.md
+└── ...
+```
+
+*Adjust this structure to match the actual repository.*
+
+---
+
+## 🔮 Future Improvements
+
+- Integrate a real payment gateway.
+- Add SMS and email admission notifications.
+- Implement advanced admission reporting and analytics.
+- Add audit logs for administrator activities.
+- Introduce automated load testing for large-scale admission periods.
+- Add admission document uploads and verification.
+
+---
+
+## 👨‍💻 Project Information
+
+**Project:** School Admission Management System  
+**Backend:** ASP.NET Core 8  
+**Frontend:** React 18 + TypeScript  
+**Database:** PostgreSQL 16
+
+---
+
+**Developed with C#, ASP.NET Core, PostgreSQL, React, TypeScript, and Docker.**
