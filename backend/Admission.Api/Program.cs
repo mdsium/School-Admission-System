@@ -3,6 +3,10 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Ensure default listening on port 8080 as specified in assignment brief (§1.2 & §1.4)
+var defaultUrls = Environment.GetEnvironmentVariable("ASPNETCORE_URLS") ?? "http://+:8080";
+builder.WebHost.UseUrls(defaultUrls);
+
 // ---- configuration (all overridable via environment variables) ----
 var connectionString =
     Environment.GetEnvironmentVariable("DB_CONNECTION_STRING")
