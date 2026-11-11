@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -66,11 +67,57 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
 builder.Services.ConfigureHttpJsonOptions(o =>
     o.SerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase);
 
+// ---- Swagger / OpenAPI ----
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "School Admission API",
+        Version = "v1",
+        Description = "Online school admission management system API — Onnorokom Projukti Limited assignment. " +
+                      "Supports JWT Bearer auth. Use /api/auth/login to get a token, then click 'Authorize'.",
+        Contact = new OpenApiContact { Name = "Admission System", Email = "admin@school.com" }
+    });
+
+    // JWT Bearer security scheme
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Enter your JWT token below (without 'Bearer ' prefix)."
+    });
+
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
+
 var app = builder.Build();
 
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Swagger UI (available in all environments for this assignment)
+app.UseSwagger();
+app.UseSwaggerUI(c =>
+{
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "School Admission API v1");
+    c.RoutePrefix = "swagger";
+    c.DocumentTitle = "School Admission API Docs";
+    c.DefaultModelsExpandDepth(-1); // hide schemas section by default
+});
 
 // Uniform JSON error body: { "error": "CODE", "message": "..." }
 app.Use(async (ctx, next) =>
@@ -90,6 +137,8 @@ app.Use(async (ctx, next) =>
 });
 
 // Create schema on startup & seed initial admin (retry while Postgres boots).
+// SeedAsync() internally calls EnsureSchemaMigratedAsync() which uses
+// CREATE TABLE IF NOT EXISTS - safe for both fresh and existing databases.
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -97,7 +146,6 @@ using (var scope = app.Services.CreateScope())
     {
         try
         {
-            await db.Database.EnsureCreatedAsync();
             await db.SeedAsync();
             break;
         }

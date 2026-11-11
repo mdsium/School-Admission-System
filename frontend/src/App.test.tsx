@@ -43,6 +43,7 @@ describe("School Admission Frontend", () => {
 
     render(<App />);
 
+    // Class 6 name shows (without shift suffix since we strip it in display)
     await waitFor(() => expect(screen.getByText("Class 6 - Morning")).toBeInTheDocument());
     expect(screen.getByText("Seat নেই")).toBeDisabled();
     expect(screen.getByText("আবেদন করুন")).toBeEnabled();
@@ -77,15 +78,18 @@ describe("School Admission Frontend", () => {
     });
   });
 
-  it("navigates to admin tab and validates class creation form", async () => {
+  it("navigates to admin tab and shows create class form", async () => {
     (api.listClasses as any).mockResolvedValue([]);
     render(<App />);
 
-    const adminTab = screen.getByText(/Class তৈরি \(Admin\)/);
+    // The "⚙️ Class তৈরি" tab is visible for unauthenticated users
+    const adminTab = screen.getByText(/Class তৈরি/);
     fireEvent.click(adminTab);
 
+    // Form heading visible
     expect(screen.getByText(/নতুন Class ও Shift তৈরি/)).toBeInTheDocument();
-    const createBtn = screen.getByText("Class তৈরি করুন");
+    // Create button disabled (name empty)
+    const createBtn = screen.getByText("তৈরি করুন");
     expect(createBtn).toBeDisabled();
   });
 
@@ -93,15 +97,16 @@ describe("School Admission Frontend", () => {
     (api.listClasses as any).mockResolvedValue([]);
     render(<App />);
 
-    const loginBtn = screen.getByText(/লগইন \(Login\)/);
+    // Header login button
+    const loginBtn = screen.getByText(/🔑 লগইন/);
     fireEvent.click(loginBtn);
 
-    expect(screen.getByText("🔑 সিস্টেমে লগইন করুন")).toBeInTheDocument();
+    expect(screen.getByText("সিস্টেমে লগইন করুন")).toBeInTheDocument();
 
     const autoFillBtn = screen.getByText("অটো-ফিল");
     fireEvent.click(autoFillBtn);
 
-    const usernameInput = screen.getByPlaceholderText(/যেমন: admin বা parent@example.com/) as HTMLInputElement;
+    const usernameInput = screen.getByPlaceholderText(/admin বা parent username/) as HTMLInputElement;
     expect(usernameInput.value).toBe("admin");
   });
 
@@ -109,10 +114,11 @@ describe("School Admission Frontend", () => {
     (api.listClasses as any).mockResolvedValue([]);
     render(<App />);
 
-    const registerBtn = screen.getByText(/রেজিস্ট্রেশন \(Parent\)/);
+    // Header register button
+    const registerBtn = screen.getByText(/📝 রেজিস্ট্রেশন/);
     fireEvent.click(registerBtn);
 
-    expect(screen.getByText("📝 অভিভাবক রেজিস্ট্রেশন")).toBeInTheDocument();
+    expect(screen.getByText("অভিভাবক রেজিস্ট্রেশন")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("parent@example.com")).toBeInTheDocument();
   });
 });

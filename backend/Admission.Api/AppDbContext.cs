@@ -65,8 +65,52 @@ public class AppDbContext : DbContext
         });
     }
 
+    public async Task EnsureSchemaMigratedAsync()
+    {
+        await Database.EnsureCreatedAsync();
+
+        // If the database already existed prior to adding new tables/columns,
+        // EnsureCreatedAsync does not create them. We ensure them idempotently here.
+        await Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS users (
+                ""Id"" VARCHAR(40) PRIMARY KEY,
+                ""Username"" VARCHAR(100) NOT NULL,
+                ""Email"" VARCHAR(150) NOT NULL,
+                ""FullName"" VARCHAR(150) NOT NULL,
+                ""PhoneNumber"" VARCHAR(30),
+                ""PasswordHash"" TEXT NOT NULL,
+                ""Role"" VARCHAR(20) NOT NULL,
+                ""MustChangePassword"" BOOLEAN NOT NULL DEFAULT FALSE,
+                ""CreatedAt"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS ix_users_username ON users (""Username"");
+            CREATE UNIQUE INDEX IF NOT EXISTS ix_users_email ON users (""Email"");
+
+            DO $$
+            BEGIN
+                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'classes') THEN
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='classes' AND column_name='Shift') THEN
+                        ALTER TABLE classes ADD COLUMN ""Shift"" VARCHAR(50) NOT NULL DEFAULT 'Morning Shift';
+                    END IF;
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='classes' AND column_name='IsActive') THEN
+                        ALTER TABLE classes ADD COLUMN ""IsActive"" BOOLEAN NOT NULL DEFAULT TRUE;
+                    END IF;
+                END IF;
+
+                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'holds') THEN
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='holds' AND column_name='UserId') THEN
+                        ALTER TABLE holds ADD COLUMN ""UserId"" VARCHAR(40);
+                        CREATE INDEX IF NOT EXISTS ix_holds_user_id ON holds (""UserId"");
+                    END IF;
+                END IF;
+            END $$;
+        ");
+    }
+
     public async Task SeedAsync()
     {
+        await EnsureSchemaMigratedAsync();
+
         // Seed default admin if none exists
         if (!await Users.AnyAsync(u => u.Role == Roles.Admin))
         {

@@ -30,9 +30,19 @@ type Tab =
   | "login"
   | "register";
 
+// ── Helper: shift badge classname
+const shiftClass = (shift: string) =>
+  shift.includes("Day") ? "shift-day" : shift.includes("Evening") ? "shift-evening" : "shift-morning";
+
+// ── Helper: shift icon
+const shiftIcon = (shift: string) =>
+  shift.includes("Day") ? "🌤️" : shift.includes("Evening") ? "🌙" : "🌅";
+
 export default function App() {
   const [user, setUser] = useState<User | null>(() => getStoredUser());
-  const [studentId, setStudentId] = useState<string>(() => localStorage.getItem(STORAGE_STUDENT_ID) ?? "");
+  const [studentId, setStudentId] = useState<string>(
+    () => localStorage.getItem(STORAGE_STUDENT_ID) ?? ""
+  );
   const [draftId, setDraftId] = useState(studentId);
   const [tab, setTab] = useState<Tab>(() => {
     const u = getStoredUser();
@@ -49,53 +59,30 @@ export default function App() {
     setTimeout(() => setToast(null), 5000);
   }, []);
 
-  // Check if current user must change password
   useEffect(() => {
-    if (user?.mustChangePassword) {
-      setShowPasswordChangeModal(true);
-    } else {
-      setShowPasswordChangeModal(false);
-    }
+    if (user?.mustChangePassword) setShowPasswordChangeModal(true);
+    else setShowPasswordChangeModal(false);
   }, [user]);
 
-  // Keep student holds count in sync
   useEffect(() => {
-    if (!isValidId(studentId)) {
-      setMyHoldsCount(0);
-      return;
-    }
-    let isMounted = true;
-    const fetchCount = async () => {
+    if (!isValidId(studentId)) { setMyHoldsCount(0); return; }
+    let mounted = true;
+    const fetch = async () => {
       try {
         const holds = await api.myHolds(studentId);
-        if (isMounted) {
-          const active = holds.filter((h) => h.status === "HELD" || h.status === "CONFIRMED");
-          setMyHoldsCount(active.length);
-        }
-      } catch {
-        // silent background poll
-      }
+        if (mounted) setMyHoldsCount(holds.filter(h => h.status === "HELD" || h.status === "CONFIRMED").length);
+      } catch { /* silent */ }
     };
-    fetchCount();
-    const interval = setInterval(fetchCount, 6000);
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
+    fetch();
+    const t = setInterval(fetch, 6000);
+    return () => { mounted = false; clearInterval(t); };
   }, [studentId]);
 
-  const handleSaveStudentId = (idToSave: string) => {
-    localStorage.setItem(STORAGE_STUDENT_ID, idToSave);
-    setStudentId(idToSave);
-    setDraftId(idToSave);
-    notify("ok", `শিক্ষার্থী নম্বর ${idToSave} সফলভাবে সেট হয়েছে।`);
-  };
-
-  const handleClearStudentId = () => {
-    localStorage.removeItem(STORAGE_STUDENT_ID);
-    setStudentId("");
-    setDraftId("");
-    notify("ok", "শিক্ষার্থী নম্বর মুছে ফেলা হয়েছে।");
+  const handleSaveStudentId = (id: string) => {
+    localStorage.setItem(STORAGE_STUDENT_ID, id);
+    setStudentId(id);
+    setDraftId(id);
+    notify("ok", `শিক্ষার্থী নম্বর সেট: ${id}`);
   };
 
   const handleLogout = () => {
@@ -105,83 +92,71 @@ export default function App() {
     notify("ok", "সফলভাবে লগআউট হয়েছে।");
   };
 
+  const userInitial = (user?.fullName || user?.username || "?").charAt(0).toUpperCase();
+
   return (
-    <div className="container">
-      {/* App Header */}
-      <header className="card app-header">
-        <div className="header-top">
-          <div className="brand-title">
-            <span style={{ fontSize: "32px" }}>🏫</span>
-            <div>
-              <h1>School Admission System</h1>
-              <div className="brand-subtitle">
-                প্রথম এলে প্রথম পাবেন ভিত্তিতে অনলাইন ভর্তি ও সাময়িক আসন সংরক্ষণ ব্যবস্থা
-              </div>
+    <div className="app-shell">
+      {/* ── TOP NAVBAR ── */}
+      <header className="app-header">
+        <div className="header-inner">
+          {/* Brand */}
+          <div className="brand">
+            <div className="brand-text">
+              <h1>School Admission</h1>
+              <small>অনলাইন ভর্তি ব্যবস্থাপনা সিস্টেম</small>
             </div>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-            <div className="auto-refresh-pill">
-              <span className="pulse-dot"></span>
-              <span>সিস্টেম সক্রিয়</span>
-            </div>
+          {/* Live pill */}
+          <div className="live-pill">
+            <span className="pulse-dot" />
+            সিস্টেম সক্রিয়
+          </div>
 
+          {/* Auth controls */}
+          <div className="header-actions">
             {user ? (
-              <div className="user-menu">
-                <span className={`role-pill ${user.role === "Admin" ? "role-admin" : "role-parent"}`}>
-                  {user.role}
-                </span>
-                <span style={{ fontSize: "13px", fontWeight: 600 }}>{user.fullName || user.username}</span>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  style={{ padding: "4px 8px", fontSize: "11px" }}
-                  onClick={handleLogout}
-                >
+              <>
+                <div className="user-chip">
+                  <div className={`user-avatar ${user.role.toLowerCase()}`}>{userInitial}</div>
+                  <span className="user-chip-name">{user.fullName || user.username}</span>
+                  <span className={`role-pill role-${user.role.toLowerCase()}`}>{user.role}</span>
+                </div>
+                <button className="btn btn-ghost btn-sm" style={{ color: "#94a3b8" }} onClick={handleLogout}>
                   লগআউট
                 </button>
-              </div>
+              </>
             ) : (
-              <div style={{ display: "flex", gap: "8px" }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  style={{ padding: "6px 12px", fontSize: "12px" }}
-                  onClick={() => setTab("login")}
-                >
-                  🔑 লগইন (Login)
+              <>
+                <button className="btn btn-ghost btn-sm" style={{ color: "#94a3b8", border: "1px solid rgb(255 255 255 / 0.15)" }} onClick={() => setTab("login")}>
+                   লগইন
                 </button>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  style={{ padding: "6px 12px", fontSize: "12px" }}
-                  onClick={() => setTab("register")}
-                >
-                  📝 রেজিস্ট্রেশন (Parent)
+                <button className="btn btn-primary btn-sm" onClick={() => setTab("register")}>
+                  📝 রেজিস্ট্রেশন
                 </button>
-              </div>
+              </>
             )}
           </div>
         </div>
+      </header>
 
-        {/* Student Identity Card (Parent / Public View) */}
-        {(!user || user.role === "Parent") && (
-          <div className="id-box">
-            <label className="id-label" htmlFor="sid">
-              👤 শিক্ষার্থীর ১৭ অঙ্কের জন্ম নিবন্ধন নম্বর (Student ID):
-            </label>
-            <div className="id-input-group">
+      {/* ── STUDENT ID BAR (Parent / Public) ── */}
+      {(!user || user.role === "Parent") && (
+        <div className="student-id-bar">
+          <div className="student-id-inner">
+            <span className="student-id-label">👤 শিক্ষার্থী আইডি (১৭ অঙ্কের জন্ম নিবন্ধন):</span>
+            <div className="student-id-input-row">
               <input
                 id="sid"
-                className="id-input"
+                className="student-id-input"
                 inputMode="numeric"
                 maxLength={17}
                 value={draftId}
-                onChange={(e) => setDraftId(e.target.value.replace(/\D/g, ""))}
+                onChange={e => setDraftId(e.target.value.replace(/\D/g, ""))}
                 placeholder="যেমন: 20152691234567890"
               />
               <button
-                className="btn btn-primary"
+                className="btn btn-primary btn-sm"
                 disabled={!isValidId(draftId) || draftId === studentId}
                 onClick={() => handleSaveStudentId(draftId)}
               >
@@ -190,145 +165,109 @@ export default function App() {
               <button
                 type="button"
                 className="btn-outline-sm"
-                title="টেস্ট করার জন্য ডেমো নম্বর ব্যবহার করুন"
-                onClick={() => {
-                  setDraftId(DEMO_STUDENT_ID);
-                  handleSaveStudentId(DEMO_STUDENT_ID);
-                }}
+                onClick={() => { setDraftId(DEMO_STUDENT_ID); handleSaveStudentId(DEMO_STUDENT_ID); }}
               >
-                ডেমো নম্বর বসান
+                ডেমো নম্বর
               </button>
               {isValidId(studentId) && (
                 <button
                   type="button"
-                  className="btn btn-secondary"
-                  style={{ padding: "4px 10px", fontSize: "12px" }}
-                  onClick={handleClearStudentId}
+                  className="btn btn-ghost btn-sm"
+                  style={{ color: "#64748b", fontSize: "11px" }}
+                  onClick={() => { localStorage.removeItem(STORAGE_STUDENT_ID); setStudentId(""); setDraftId(""); }}
                 >
                   রিসেট
                 </button>
               )}
             </div>
-
-            <div className="id-status-row">
-              {draftId.length > 0 && !isValidId(draftId) ? (
-                <span style={{ color: "var(--danger)", fontWeight: 500 }}>
-                  ⚠️ {draftId.length}/১৭ অঙ্ক — ঠিক ১৭টি পূর্ণসংখ্যা দিন।
-                </span>
-              ) : isValidId(studentId) ? (
-                <span style={{ color: "var(--success)", fontWeight: 600 }}>
-                  ✓ বর্তমান শিক্ষার্থী আইডি: {studentId}
-                </span>
-              ) : (
-                <span style={{ color: "var(--text-muted)" }}>
-                  আবেদন ও ভর্তি নিশ্চিত করার পূর্বে শিক্ষার্থীর ১৭ অঙ্কের জন্ম নিবন্ধন নম্বর সেট করুন।
-                </span>
-              )}
-            </div>
+            <span className={`id-status ${draftId.length > 0 && !isValidId(draftId) ? "warn" : isValidId(studentId) ? "ok" : "hint"}`}>
+              {draftId.length > 0 && !isValidId(draftId)
+                ? `⚠ ${draftId.length}/১৭ অঙ্ক`
+                : isValidId(studentId)
+                ? `✓ ${studentId}`
+                : "আইডি সেট নেই"}
+            </span>
           </div>
-        )}
-      </header>
-
-      {/* Navigation Tabs */}
-      <nav className="tabs-nav" aria-label="প্রধান নেভিগেশন">
-        {user?.role === "Admin" ? (
-          <>
-            <button
-              className={`tab-btn ${tab === "admin-dash" ? "active" : ""}`}
-              onClick={() => setTab("admin-dash")}
-            >
-              <span>📊 Admin Dashboard</span>
-            </button>
-            <button
-              className={`tab-btn ${tab === "admin-classes" ? "active" : ""}`}
-              onClick={() => setTab("admin-classes")}
-            >
-              <span>⚙️ Class ও Shift পরিচালনা</span>
-            </button>
-            <button
-              className={`tab-btn ${tab === "admin-apps" ? "active" : ""}`}
-              onClick={() => setTab("admin-apps")}
-            >
-              <span>📑 সকল আবেদন (Applications)</span>
-            </button>
-          </>
-        ) : (
-          <>
-            {user?.role === "Parent" && (
-              <button
-                className={`tab-btn ${tab === "parent-dash" ? "active" : ""}`}
-                onClick={() => setTab("parent-dash")}
-              >
-                <span>🏠 Parent Dashboard</span>
-              </button>
-            )}
-            <button
-              className={`tab-btn ${tab === "classes" ? "active" : ""}`}
-              onClick={() => setTab("classes")}
-            >
-              <span>📋 Class ও আসন তালিকা</span>
-            </button>
-            <button
-              className={`tab-btn ${tab === "mine" ? "active" : ""}`}
-              onClick={() => setTab("mine")}
-            >
-              <span>🎓 আমার আবেদনসমূহ</span>
-              {myHoldsCount > 0 && <span className="tab-badge">{myHoldsCount}</span>}
-            </button>
-            {!user && (
-              <button
-                className={`tab-btn ${tab === "admin-classes" ? "active" : ""}`}
-                onClick={() => setTab("admin-classes")}
-              >
-                <span>⚙️ Class তৈরি (Admin)</span>
-              </button>
-            )}
-          </>
-        )}
-      </nav>
-
-      {/* Toast Alert */}
-      {toast && (
-        <div className={`toast-bar ${toast.type}`} role="alert">
-          <span>{toast.text}</span>
-          <button
-            onClick={() => setToast(null)}
-            style={{
-              background: "transparent",
-              border: "none",
-              cursor: "pointer",
-              fontWeight: "bold",
-              fontSize: "16px",
-              color: "inherit",
-            }}
-          >
-            ✕
-          </button>
         </div>
       )}
 
-      {/* Mandatory Password Change Modal for Default Admin */}
+      {/* ── NAV TABS ── */}
+      {tab !== "login" && tab !== "register" && (
+        <div className="tabs-wrapper">
+          <div className="tabs-inner">
+            <nav className="tabs-nav" aria-label="নেভিগেশন">
+              {user?.role === "Admin" ? (
+                <>
+                  <button className={`tab-btn ${tab === "admin-dash" ? "active" : ""}`} onClick={() => setTab("admin-dash")}>
+                    📊 Dashboard
+                  </button>
+                  <button className={`tab-btn ${tab === "admin-classes" ? "active" : ""}`} onClick={() => setTab("admin-classes")}>
+                    ⚙️ Class ও Shift
+                  </button>
+                  <button className={`tab-btn ${tab === "admin-apps" ? "active" : ""}`} onClick={() => setTab("admin-apps")}>
+                    📑 আবেদনসমূহ
+                  </button>
+                  <a className="tab-btn" href="http://localhost:8080/swagger" target="_blank" rel="noopener noreferrer" style={{ color: "#6366f1" }}>
+                    📖 API Docs
+                  </a>
+                </>
+              ) : (
+                <>
+                  {user?.role === "Parent" && (
+                    <button className={`tab-btn ${tab === "parent-dash" ? "active" : ""}`} onClick={() => setTab("parent-dash")}>
+                      🏠 Dashboard
+                    </button>
+                  )}
+                  <button className={`tab-btn ${tab === "classes" ? "active" : ""}`} onClick={() => setTab("classes")}>
+                    📋 শ্রেণি ও আসন
+                  </button>
+                  <button className={`tab-btn ${tab === "mine" ? "active" : ""}`} onClick={() => setTab("mine")}>
+                    🎓 আমার আবেদন
+                    {myHoldsCount > 0 && <span className="tab-badge">{myHoldsCount}</span>}
+                  </button>
+                  {!user && (
+                    <button className={`tab-btn ${tab === "admin-classes" ? "active" : ""}`} onClick={() => setTab("admin-classes")}>
+                      ⚙️ Class তৈরি
+                    </button>
+                  )}
+                </>
+              )}
+            </nav>
+          </div>
+        </div>
+      )}
+
+      {/* ── TOAST ── */}
+      {toast && (
+        <div className="toast-container">
+          <div className={`toast-bar ${toast.type}`} role="alert">
+            <span className="toast-icon">{toast.type === "ok" ? "✓" : "✕"}</span>
+            <span style={{ flex: 1 }}>{toast.text}</span>
+            <button className="toast-close" onClick={() => setToast(null)}>✕</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── MANDATORY PASSWORD CHANGE ── */}
       {showPasswordChangeModal && (
         <ChangePasswordModal
           user={user!}
-          onSuccess={(updatedUser) => {
+          onSuccess={updatedUser => {
             setUser(updatedUser);
             setShowPasswordChangeModal(false);
-            notify("ok", "পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে।");
+            notify("ok", "পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে।");
           }}
         />
       )}
 
-      {/* Views */}
+      {/* ── VIEWS ── */}
       {tab === "login" && (
         <LoginView
-          onSuccess={(auth) => {
+          onSuccess={auth => {
             saveAuthSession(auth);
             setUser(auth.user);
             notify("ok", `স্বাগতম, ${auth.user.fullName || auth.user.username}!`);
-            if (auth.user.mustChangePassword) {
-              setShowPasswordChangeModal(true);
-            }
+            if (auth.user.mustChangePassword) setShowPasswordChangeModal(true);
             setTab(auth.user.role === "Admin" ? "admin-dash" : "parent-dash");
           }}
           goRegister={() => setTab("register")}
@@ -337,64 +276,60 @@ export default function App() {
 
       {tab === "register" && (
         <RegisterView
-          onSuccess={(auth) => {
+          onSuccess={auth => {
             saveAuthSession(auth);
             setUser(auth.user);
-            notify("ok", "রেজিস্ট্রেশন সফল হয়েছে! অভিভাবক হিসেবে স্বাগতম।");
+            notify("ok", "রেজিস্ট্রেশন সফল! স্বাগতম।");
             setTab("parent-dash");
           }}
           goLogin={() => setTab("login")}
         />
       )}
 
-      {tab === "parent-dash" && (
-        <ParentDashboard
-          user={user}
-          studentId={studentId}
-          goClasses={() => setTab("classes")}
-          goMine={() => setTab("mine")}
-          notify={notify}
-        />
+      {tab !== "login" && tab !== "register" && (
+        <div className="page-content">
+          {tab === "parent-dash" && (
+            <ParentDashboard
+              user={user}
+              studentId={studentId}
+              goClasses={() => setTab("classes")}
+              goMine={() => setTab("mine")}
+              notify={notify}
+            />
+          )}
+          {tab === "classes" && (
+            <ClassList
+              studentId={isValidId(studentId) ? studentId : ""}
+              notify={notify}
+              goMine={() => setTab("mine")}
+              goSetId={() => document.getElementById("sid")?.focus()}
+            />
+          )}
+          {tab === "mine" && (
+            <MyHoldsView
+              studentId={isValidId(studentId) ? studentId : ""}
+              notify={notify}
+              goClasses={() => setTab("classes")}
+            />
+          )}
+          {tab === "admin-dash" && (
+            <AdminDashboard
+              goClasses={() => setTab("admin-classes")}
+              goApps={() => setTab("admin-apps")}
+              notify={notify}
+            />
+          )}
+          {tab === "admin-classes" && <AdminClassesView notify={notify} />}
+          {tab === "admin-apps" && <AdminApplicationsView notify={notify} />}
+        </div>
       )}
-
-      {tab === "classes" && (
-        <ClassList
-          studentId={isValidId(studentId) ? studentId : ""}
-          notify={notify}
-          goMine={() => setTab("mine")}
-          goSetId={() => {
-            const sidInput = document.getElementById("sid");
-            sidInput?.focus();
-          }}
-        />
-      )}
-
-      {tab === "mine" && (
-        <MyHoldsView
-          studentId={isValidId(studentId) ? studentId : ""}
-          notify={notify}
-          goClasses={() => setTab("classes")}
-        />
-      )}
-
-      {tab === "admin-dash" && (
-        <AdminDashboard
-          goClasses={() => setTab("admin-classes")}
-          goApps={() => setTab("admin-apps")}
-          notify={notify}
-        />
-      )}
-
-      {tab === "admin-classes" && <AdminClassesView notify={notify} />}
-
-      {tab === "admin-apps" && <AdminApplicationsView notify={notify} />}
     </div>
   );
 }
 
-// ==========================================
-// 1. Auth Views (Login & Register)
-// ==========================================
+// ============================================================
+// 1. AUTH VIEWS
+// ============================================================
 
 function LoginView({ onSuccess, goRegister }: { onSuccess: (auth: any) => void; goRegister: () => void }) {
   const [username, setUsername] = useState("");
@@ -416,68 +351,49 @@ function LoginView({ onSuccess, goRegister }: { onSuccess: (auth: any) => void; 
     }
   };
 
-  const handleQuickAdmin = () => {
-    setUsername("admin");
-    setPassword("1234");
-  };
-
   return (
-    <div className="auth-wrapper">
-      <div className="auth-card">
-        <h2 className="auth-title">🔑 সিস্টেমে লগইন করুন</h2>
-        <p className="auth-subtitle">Parent বা School Admin হিসেবে আপনার অ্যাকাউন্টে প্রবেশ করুন।</p>
+    <div className="auth-page">
+      <div className="auth-container">
+        <div className="auth-card">
+          <div className="auth-logo">🔑</div>
+          <h2 className="auth-title">সিস্টেমে লগইন করুন</h2>
+          <p className="auth-subtitle">Parent বা Admin হিসেবে আপনার অ্যাকাউন্টে প্রবেশ করুন।</p>
 
-        {error && <div className="error-box" style={{ marginBottom: "16px" }}>{error}</div>}
+          {error && <div className="error-box mb-16">{error}</div>}
 
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label>ইউজারনেম বা ইমেইল</label>
-            <input
-              className="form-input"
-              type="text"
-              required
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="যেমন: admin বা parent@example.com"
-            />
+          <form onSubmit={handleSubmit}>
+            <div className="form-group">
+              <label className="form-label">ইউজারনেম</label>
+              <input className="form-input" type="text" required autoFocus value={username}
+                onChange={e => setUsername(e.target.value)} placeholder="admin বা parent username" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">পাসওয়ার্ড</label>
+              <input className="form-input" type="password" required value={password}
+                onChange={e => setPassword(e.target.value)} placeholder="••••••••" />
+            </div>
+            <button className="btn btn-primary btn-lg btn-full" style={{ marginTop: 8 }} disabled={loading}>
+              {loading ? "লগইন হচ্ছে…" : "লগইন করুন →"}
+            </button>
+          </form>
+
+          <div className="auth-demo-box">
+            <strong>⚡ ডেমো অ্যাকাউন্ট</strong>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span>Admin: <code>admin</code> / <code>1234</code></span>
+              <button type="button" className="btn-outline-sm"
+                onClick={() => { setUsername("admin"); setPassword("1234"); }}>
+                অটো-ফিল
+              </button>
+            </div>
           </div>
 
-          <div className="form-group">
-            <label>পাসওয়ার্ড</label>
-            <input
-              className="form-input"
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="আপনার পাসওয়ার্ড লিখুন"
-            />
-          </div>
-
-          <button className="btn btn-primary" style={{ width: "100%", marginTop: "10px" }} disabled={loading}>
-            {loading ? "লগইন হচ্ছে..." : "লগইন করুন"}
-          </button>
-        </form>
-
-        <div className="auth-demo-box">
-          <div style={{ fontWeight: 600, marginBottom: "4px", color: "#334155" }}>⚡ টেস্ট করার জন্য ডেমো অ্যাকাউন্ট:</div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span>Admin: <code>admin</code> / <code>1234</code></span>
-            <button type="button" className="btn-outline-sm" onClick={handleQuickAdmin}>
-              অটো-ফিল
+          <div className="auth-link-row">
+            নতুন অভিভাবক?{" "}
+            <button type="button" className="auth-link" onClick={goRegister}>
+              অ্যাকাউন্ট তৈরি করুন →
             </button>
           </div>
-        </div>
-
-        <div style={{ textAlign: "center", marginTop: "20px", fontSize: "13px" }}>
-          নতুন অভিভাবক?{" "}
-          <button
-            type="button"
-            style={{ background: "none", border: "none", color: "var(--primary)", fontWeight: 600, cursor: "pointer" }}
-            onClick={goRegister}
-          >
-            অ্যাকাউন্ট তৈরি করুন (Register)
-          </button>
         </div>
       </div>
     </div>
@@ -498,13 +414,7 @@ function RegisterView({ onSuccess, goLogin }: { onSuccess: (auth: any) => void; 
     setError(null);
     setLoading(true);
     try {
-      const res = await api.register({
-        fullName,
-        username,
-        email,
-        password,
-        phoneNumber: phoneNumber || undefined,
-      });
+      const res = await api.register({ fullName, username, email, password, phoneNumber: phoneNumber || undefined });
       onSuccess(res);
     } catch (err) {
       setError(errMsg(err));
@@ -514,88 +424,52 @@ function RegisterView({ onSuccess, goLogin }: { onSuccess: (auth: any) => void; 
   };
 
   return (
-    <div className="auth-wrapper">
-      <div className="auth-card">
-        <h2 className="auth-title">📝 অভিভাবক রেজিস্ট্রেশন</h2>
-        <p className="auth-subtitle">সন্তানের অনলাইনে ভর্তির আবেদন করতে আপনার তথ্য দিয়ে নিবন্ধন করুন।</p>
+    <div className="auth-page">
+      <div className="auth-container" style={{ maxWidth: 480 }}>
+        <div className="auth-card">
+          <div className="auth-logo">📝</div>
+          <h2 className="auth-title">অভিভাবক রেজিস্ট্রেশন</h2>
+          <p className="auth-subtitle">সন্তানের অনলাইন ভর্তির আবেদন করতে নিবন্ধন করুন।</p>
 
-        {error && <div className="error-box" style={{ marginBottom: "16px" }}>{error}</div>}
+          {error && <div className="error-box mb-16">{error}</div>}
 
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label>অভিভাবকের পূর্ণ নাম *</label>
-            <input
-              className="form-input"
-              type="text"
-              required
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              placeholder="যেমন: মোঃ রফিকুল ইসলাম"
-            />
+          <form onSubmit={handleSubmit}>
+            <div className="form-group">
+              <label className="form-label">পূর্ণ নাম *</label>
+              <input className="form-input" type="text" required autoFocus value={fullName}
+                onChange={e => setFullName(e.target.value)} placeholder="মোঃ রফিকুল ইসলাম" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">ইউজারনেম *</label>
+              <input className="form-input" type="text" required value={username}
+                onChange={e => setUsername(e.target.value)} placeholder="rofiqul123" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">ইমেইল *</label>
+              <input className="form-input" type="email" required value={email}
+                onChange={e => setEmail(e.target.value)} placeholder="parent@example.com" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">মোবাইল নম্বর (ঐচ্ছিক)</label>
+              <input className="form-input" type="tel" value={phoneNumber}
+                onChange={e => setPhoneNumber(e.target.value)} placeholder="01700000000" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">পাসওয়ার্ড * (কমপক্ষে ৪ অক্ষর)</label>
+              <input className="form-input" type="password" required minLength={4} value={password}
+                onChange={e => setPassword(e.target.value)} placeholder="••••••••" />
+            </div>
+            <button className="btn btn-primary btn-lg btn-full" style={{ marginTop: 8 }} disabled={loading}>
+              {loading ? "নিবন্ধন হচ্ছে…" : "অ্যাকাউন্ট তৈরি করুন →"}
+            </button>
+          </form>
+
+          <div className="auth-link-row">
+            ইতিমধ্যে অ্যাকাউন্ট আছে?{" "}
+            <button type="button" className="auth-link" onClick={goLogin}>
+              লগইন করুন →
+            </button>
           </div>
-
-          <div className="form-group">
-            <label>ইউজারনেম *</label>
-            <input
-              className="form-input"
-              type="text"
-              required
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="যেমন: rofiqul"
-            />
-          </div>
-
-          <div className="form-group">
-            <label>ইমেইল এড্রেস *</label>
-            <input
-              className="form-input"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="parent@example.com"
-            />
-          </div>
-
-          <div className="form-group">
-            <label>মোবাইল নম্বর (ঐচ্ছিক)</label>
-            <input
-              className="form-input"
-              type="tel"
-              value={phoneNumber}
-              onChange={(e) => setPhoneNumber(e.target.value)}
-              placeholder="01700000000"
-            />
-          </div>
-
-          <div className="form-group">
-            <label>পাসওয়ার্ড * (কমপক্ষে ৪ অক্ষর)</label>
-            <input
-              className="form-input"
-              type="password"
-              required
-              minLength={4}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="একটি শক্তিশালী পাসওয়ার্ড দিন"
-            />
-          </div>
-
-          <button className="btn btn-primary" style={{ width: "100%", marginTop: "10px" }} disabled={loading}>
-            {loading ? "নিবন্ধন হচ্ছে..." : "অ্যাকাউন্ট তৈরি করুন"}
-          </button>
-        </form>
-
-        <div style={{ textAlign: "center", marginTop: "20px", fontSize: "13px" }}>
-          ইতিমধ্যে অ্যাকাউন্ট আছে?{" "}
-          <button
-            type="button"
-            style={{ background: "none", border: "none", color: "var(--primary)", fontWeight: 600, cursor: "pointer" }}
-            onClick={goLogin}
-          >
-            লগইন করুন
-          </button>
         </div>
       </div>
     </div>
@@ -611,12 +485,8 @@ function ChangePasswordModal({ user, onSuccess }: { user: User; onSuccess: (u: U
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newPassword !== confirmPassword) {
-      setError("নতুন পাসওয়ার্ড দুটি মিলছে না।");
-      return;
-    }
-    setError(null);
-    setLoading(true);
+    if (newPassword !== confirmPassword) { setError("নতুন পাসওয়ার্ড দুটি মিলছে না।"); return; }
+    setError(null); setLoading(true);
     try {
       const updated = await api.changePassword({ currentPassword, newPassword });
       onSuccess(updated);
@@ -630,58 +500,34 @@ function ChangePasswordModal({ user, onSuccess }: { user: User; onSuccess: (u: U
   return (
     <div className="modal-overlay">
       <div className="modal-dialog">
-        <div className="modal-header" style={{ background: "#fef2f2" }}>
+        <div className="modal-header" style={{ background: "#fef2f2", borderBottomColor: "#fecaca" }}>
           <h3 style={{ color: "#b91c1c" }}>⚠️ ডিফল্ট পাসওয়ার্ড পরিবর্তন আবশ্যক</h3>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
-            <p style={{ fontSize: "13px", color: "var(--text-muted)", marginBottom: "16px" }}>
-              সুরক্ষার স্বার্থে প্রথমবার লগইনের পর ডিফল্ট পাসওয়ার্ড (<code>1234</code>) পরিবর্তন করে নতুন পাসওয়ার্ড সেট করুন।
+            <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 16, lineHeight: 1.6 }}>
+              সুরক্ষার স্বার্থে ডিফল্ট পাসওয়ার্ড (<code>1234</code>) পরিবর্তন করে নতুন পাসওয়ার্ড সেট করুন।
             </p>
-
-            {error && <div className="error-box" style={{ marginBottom: "16px" }}>{error}</div>}
-
+            {error && <div className="error-box mb-16">{error}</div>}
             <div className="form-group">
-              <label>বর্তমান পাসওয়ার্ড</label>
-              <input
-                className="form-input"
-                type="password"
-                required
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-              />
+              <label className="form-label">বর্তমান পাসওয়ার্ড</label>
+              <input className="form-input" type="password" required value={currentPassword}
+                onChange={e => setCurrentPassword(e.target.value)} />
             </div>
-
             <div className="form-group">
-              <label>নতুন পাসওয়ার্ড</label>
-              <input
-                className="form-input"
-                type="password"
-                required
-                minLength={4}
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="নতুন পাসওয়ার্ড দিন"
-              />
+              <label className="form-label">নতুন পাসওয়ার্ড</label>
+              <input className="form-input" type="password" required minLength={4} value={newPassword}
+                onChange={e => setNewPassword(e.target.value)} placeholder="••••••••" />
             </div>
-
             <div className="form-group">
-              <label>নতুন পাসওয়ার্ড নিশ্চিত করুন</label>
-              <input
-                className="form-input"
-                type="password"
-                required
-                minLength={4}
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="আবার লিখুন"
-              />
+              <label className="form-label">নতুন পাসওয়ার্ড নিশ্চিত করুন</label>
+              <input className="form-input" type="password" required minLength={4} value={confirmPassword}
+                onChange={e => setConfirmPassword(e.target.value)} placeholder="••••••••" />
             </div>
           </div>
-
           <div className="modal-footer">
             <button className="btn btn-primary" disabled={loading}>
-              {loading ? "সংরক্ষণ হচ্ছে..." : "পাসওয়ার্ড পরিবর্তন ও সংরক্ষণ"}
+              {loading ? "সংরক্ষণ হচ্ছে…" : "পাসওয়ার্ড পরিবর্তন করুন"}
             </button>
           </div>
         </form>
@@ -690,21 +536,13 @@ function ChangePasswordModal({ user, onSuccess }: { user: User; onSuccess: (u: U
   );
 }
 
-// ==========================================
-// 2. Parent Dashboard
-// ==========================================
+// ============================================================
+// 2. PARENT DASHBOARD
+// ============================================================
 
-function ParentDashboard({
-  user,
-  studentId,
-  goClasses,
-  goMine,
-  notify,
-}: {
-  user: User | null;
-  studentId: string;
-  goClasses: () => void;
-  goMine: () => void;
+function ParentDashboard({ user, studentId, goClasses, goMine, notify }: {
+  user: User | null; studentId: string;
+  goClasses: () => void; goMine: () => void;
   notify: (type: "ok" | "err", text: string) => void;
 }) {
   const [classes, setClasses] = useState<ClassInfo[]>([]);
@@ -713,100 +551,77 @@ function ParentDashboard({
 
   useEffect(() => {
     let active = true;
-    const load = async () => {
+    (async () => {
       try {
         const cls = await api.listClasses();
-        let myH: MyHold[] = [];
-        if (isValidId(studentId)) {
-          myH = await api.myHolds(studentId);
-        }
-        if (active) {
-          setClasses(cls);
-          setHolds(myH);
-        }
-      } catch (err) {
-        if (active) notify("err", errMsg(err));
-      } finally {
-        if (active) setLoading(false);
-      }
-    };
-    load();
+        const myH = isValidId(studentId) ? await api.myHolds(studentId) : [];
+        if (active) { setClasses(cls); setHolds(myH); }
+      } catch (err) { if (active) notify("err", errMsg(err)); }
+      finally { if (active) setLoading(false); }
+    })();
     return () => { active = false; };
   }, [studentId, notify]);
 
-  const activeHolds = holds.filter((h) => h.status === "HELD");
-  const confirmedHolds = holds.filter((h) => h.status === "CONFIRMED");
-  const totalAvailableSeats = classes.reduce((sum, c) => sum + c.availableSeats, 0);
+  const activeHolds = holds.filter(h => h.status === "HELD");
+  const confirmedHolds = holds.filter(h => h.status === "CONFIRMED");
+  const totalAvailable = classes.reduce((s, c) => s + c.availableSeats, 0);
 
   return (
     <div>
-      <div className="card" style={{ background: "linear-gradient(135deg, #1e3a8a, #3b82f6)", color: "#ffffff", padding: "24px" }}>
-        <h2 style={{ fontSize: "22px", fontWeight: 700, marginBottom: "6px" }}>
-          স্বাগতম, {user?.fullName || "অভিভাবক"}!
-        </h2>
-        <p style={{ fontSize: "14px", opacity: 0.9 }}>
-          আপনার সন্তানের জন্য সহজে পছন্দের শ্রেণি ও শিফটে আসন সংরক্ষণ এবং ভর্তি নিশ্চিত করুন।
-        </p>
+      {/* Hero */}
+      <div className="hero-card parent-hero">
+        <div className="hero-title">🌿 স্বাগতম, {user?.fullName || "অভিভাবক"}!</div>
+        <div className="hero-subtitle">আপনার সন্তানের জন্য পছন্দের শ্রেণিতে সহজেই আসন সংরক্ষণ করুন।</div>
       </div>
 
-      {/* KPI Cards */}
+      {/* KPI */}
       <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-icon" style={{ background: "#fef3c7" }}>⏳</div>
-          <div>
-            <div className="stat-val">{activeHolds.length}</div>
-            <div className="stat-label">চলমান আসন সংরক্ষণ (Held)</div>
+        <div className="stat-card" style={{ "--stat-accent": "var(--warning)" } as any}>
+          <div className="stat-icon" style={{ background: "var(--warning-light)" }}>⏳</div>
+          <div className="stat-body">
+            <div className="stat-val">{loading ? "…" : activeHolds.length}</div>
+            <div className="stat-label">চলমান Hold</div>
           </div>
         </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ background: "#dcfce7" }}>🎓</div>
-          <div>
-            <div className="stat-val">{confirmedHolds.length}</div>
-            <div className="stat-label">নিশ্চিত ভর্তি (Confirmed)</div>
+        <div className="stat-card" style={{ "--stat-accent": "var(--success)" } as any}>
+          <div className="stat-icon" style={{ background: "var(--success-light)" }}>🎓</div>
+          <div className="stat-body">
+            <div className="stat-val">{loading ? "…" : confirmedHolds.length}</div>
+            <div className="stat-label">নিশ্চিত ভর্তি</div>
           </div>
         </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ background: "#dbeafe" }}>🪑</div>
-          <div>
-            <div className="stat-val">{totalAvailableSeats}</div>
-            <div className="stat-label">স্কুলে সর্বমোট খালি আসন</div>
+        <div className="stat-card" style={{ "--stat-accent": "var(--accent)" } as any}>
+          <div className="stat-icon" style={{ background: "var(--accent-light)" }}>🪑</div>
+          <div className="stat-body">
+            <div className="stat-val">{loading ? "…" : totalAvailable}</div>
+            <div className="stat-label">মোট খালি আসন</div>
           </div>
         </div>
-
         <div className="stat-card">
           <div className="stat-icon" style={{ background: "#f1f5f9" }}>🏫</div>
-          <div>
-            <div className="stat-val">{classes.length}</div>
-            <div className="stat-label">সক্রিয় শ্রেণি ও শিফট</div>
+          <div className="stat-body">
+            <div className="stat-val">{loading ? "…" : classes.length}</div>
+            <div className="stat-label">সক্রিয় শ্রেণি</div>
           </div>
         </div>
       </div>
 
-      {/* Quick Action Grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "20px" }}>
-        <div className="card" style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-          <div>
-            <h3 style={{ fontSize: "16px", fontWeight: 700, marginBottom: "8px" }}>📋 ভর্তি আবেদন করুন</h3>
-            <p style={{ fontSize: "13px", color: "var(--text-muted)", marginBottom: "14px" }}>
-              খালি আসনের ভিত্তিতে সকাল, দিন বা সান্ধ্য শিফটে তাৎক্ষণিক সিট বুকিং দিন।
-            </p>
-          </div>
+      {/* Quick Actions */}
+      <div className="action-grid">
+        <div className="action-card">
+          <div className="action-card-icon" style={{ background: "#eef2ff" }}>📋</div>
+          <h3>ভর্তি আবেদন করুন</h3>
+          <p>খালি আসনের ভিত্তিতে সকাল, দিন বা সান্ধ্য শিফটে তাৎক্ষণিক সিট বুকিং দিন।</p>
           <button className="btn btn-primary" onClick={goClasses}>
-            শ্রেণি ও আসন তালিকা দেখুন →
+            শ্রেণি ও আসন তালিকা →
           </button>
         </div>
-
-        <div className="card" style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-          <div>
-            <h3 style={{ fontSize: "16px", fontWeight: 700, marginBottom: "8px" }}>🎓 চলমান আবেদন ও রশিদ</h3>
-            <p style={{ fontSize: "13px", color: "var(--text-muted)", marginBottom: "14px" }}>
-              সংরক্ষিত আসনের মেয়াদ কাউন্টডাউন দেখুন, ফি পরিশোধ করে নিশ্চিত করুন বা রশিদ ডাউনলোড করুন।
-            </p>
-          </div>
+        <div className="action-card">
+          <div className="action-card-icon" style={{ background: "var(--success-light)" }}>🎓</div>
+          <h3>চলমান আবেদন ও রশিদ</h3>
+          <p>সংরক্ষিত আসনের মেয়াদ দেখুন, নিশ্চিত করুন অথবা ভর্তির রশিদ ডাউনলোড করুন।</p>
           <button className="btn btn-secondary" onClick={goMine}>
-            আমার আবেদনসমূহ দেখুন ({holds.length}) →
+            আমার আবেদন ({holds.length}) →
           </button>
         </div>
       </div>
@@ -814,17 +629,12 @@ function ParentDashboard({
   );
 }
 
-// ==========================================
-// 3. Admin Dashboard & Views
-// ==========================================
+// ============================================================
+// 3. ADMIN DASHBOARD & VIEWS
+// ============================================================
 
-function AdminDashboard({
-  goClasses,
-  goApps,
-  notify,
-}: {
-  goClasses: () => void;
-  goApps: () => void;
+function AdminDashboard({ goClasses, goApps, notify }: {
+  goClasses: () => void; goApps: () => void;
   notify: (type: "ok" | "err", text: string) => void;
 }) {
   const [overview, setOverview] = useState<AdminOverview | null>(null);
@@ -832,110 +642,73 @@ function AdminDashboard({
 
   useEffect(() => {
     let active = true;
-    const fetchStats = async () => {
+    const fetch = async () => {
       try {
         const data = await api.adminOverview();
         if (active) setOverview(data);
-      } catch (err) {
-        if (active) notify("err", errMsg(err));
-      } finally {
-        if (active) setLoading(false);
-      }
+      } catch (err) { if (active) notify("err", errMsg(err)); }
+      finally { if (active) setLoading(false); }
     };
-    fetchStats();
-    const interval = setInterval(fetchStats, 6000);
-    return () => {
-      active = false;
-      clearInterval(interval);
-    };
+    fetch();
+    const t = setInterval(fetch, 6000);
+    return () => { active = false; clearInterval(t); };
   }, [notify]);
+
+  const kpi = (val: number | undefined | null) => loading ? "…" : (val ?? 0);
 
   return (
     <div>
-      <div className="card" style={{ background: "linear-gradient(135deg, #0f172a, #334155)", color: "#ffffff", padding: "24px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+      {/* Hero */}
+      <div className="hero-card admin-hero">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
           <div>
-            <h2 style={{ fontSize: "22px", fontWeight: 700, marginBottom: "6px" }}>📊 স্কুল অ্যাডমিন ড্যাশবোর্ড</h2>
-            <p style={{ fontSize: "13px", opacity: 0.85 }}>
-              সকল শ্রেণি, শিফট, আসন সক্ষমতা ও রিয়েল-টাইম ভর্তি কার্যক্রম তদারকি করুন।
-            </p>
+            <div className="hero-title">📊 Admin Dashboard</div>
+            <div className="hero-subtitle">সকল শ্রেণি, শিফট, আসন ও রিয়েল-টাইম ভর্তি কার্যক্রম তদারকি করুন।</div>
           </div>
-          <button className="btn btn-primary" onClick={goClasses}>
-            ➕ নতুন Class বা Shift যোগ করুন
-          </button>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button className="btn btn-primary btn-sm" onClick={goClasses}>➕ নতুন Class</button>
+            <a className="btn btn-sm" style={{ background: "rgb(255 255 255 / 0.12)", color: "#fff", border: "1px solid rgb(255 255 255 / 0.2)" }}
+              href="http://localhost:8080/swagger" target="_blank" rel="noopener noreferrer">
+              📖 API Docs
+            </a>
+          </div>
         </div>
       </div>
 
-      {/* KPI Stats */}
+      {/* KPI Grid */}
       <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-icon" style={{ background: "#e0e7ff" }}>🏫</div>
-          <div>
-            <div className="stat-val">{overview?.totalClasses ?? "..."}</div>
-            <div className="stat-label">মোট সক্রিয় ক্লাস</div>
+        {[
+          { icon: "🏫", bg: "#e0e7ff", label: "সক্রিয় ক্লাস", val: kpi(overview?.totalClasses), accent: "var(--primary)" },
+          { icon: "☀️", bg: "var(--warning-light)", label: "শিফট সংখ্যা", val: kpi(overview?.totalShifts), accent: "var(--warning)" },
+          { icon: "🪑", bg: "#f1f5f9", label: "মোট আসন", val: kpi(overview?.totalSeats), accent: "var(--text-muted)" },
+          { icon: "⏳", bg: "var(--danger-light)", label: "Hold আসন", val: kpi(overview?.heldSeats), accent: "var(--danger)" },
+          { icon: "✅", bg: "var(--success-light)", label: "নিশ্চিত ভর্তি", val: kpi(overview?.confirmedSeats), accent: "var(--success)" },
+          { icon: "🟢", bg: "var(--accent-light)", label: "খালি আসন", val: kpi(overview?.availableSeats), accent: "var(--accent)" },
+        ].map(s => (
+          <div key={s.label} className="stat-card" style={{ "--stat-accent": s.accent } as any}>
+            <div className="stat-icon" style={{ background: s.bg }}>{s.icon}</div>
+            <div className="stat-body">
+              <div className="stat-val">{s.val}</div>
+              <div className="stat-label">{s.label}</div>
+            </div>
           </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ background: "#fef3c7" }}>☀️</div>
-          <div>
-            <div className="stat-val">{overview?.totalShifts ?? "..."}</div>
-            <div className="stat-label">কনফিগার করা শিফট</div>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ background: "#f1f5f9" }}>🪑</div>
-          <div>
-            <div className="stat-val">{overview?.totalSeats ?? "..."}</div>
-            <div className="stat-label">মোট আসন সক্ষমতা</div>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ background: "#fee2e2" }}>⏳</div>
-          <div>
-            <div className="stat-val">{overview?.heldSeats ?? "..."}</div>
-            <div className="stat-label">হোল্ডে থাকা আসন</div>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ background: "#dcfce7" }}>✅</div>
-          <div>
-            <div className="stat-val">{overview?.confirmedSeats ?? "..."}</div>
-            <div className="stat-label">নিশ্চিত ভর্তি (Confirmed)</div>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ background: "#dbeafe" }}>🟢</div>
-          <div>
-            <div className="stat-val">{overview?.availableSeats ?? "..."}</div>
-            <div className="stat-label">বর্তমানে খালি আসন</div>
-          </div>
-        </div>
+        ))}
       </div>
 
-      {/* Quick Action Navigation */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-        <div className="card">
-          <h3 style={{ fontSize: "16px", fontWeight: 700, marginBottom: "8px" }}>⚙️ Class ও Shift পরিচালনা</h3>
-          <p style={{ fontSize: "13px", color: "var(--text-muted)", marginBottom: "16px" }}>
-            শ্রেণি তৈরি করুন, মর্নিং/ডে/সান্ধ্য শিফট নির্ধারণ করুন এবং আসন কোটা পরিবর্তন করুন।
-          </p>
-          <button className="btn btn-secondary" onClick={goClasses}>
-            শ্রেণি ও আসন তালিকা খুলুন →
-          </button>
+      {/* Quick Actions */}
+      <div className="action-grid">
+        <div className="action-card">
+          <div className="action-card-icon" style={{ background: "#eef2ff" }}>⚙️</div>
+          <h3>Class ও Shift পরিচালনা</h3>
+          <p>শ্রেণি তৈরি করুন, মর্নিং/ডে/সান্ধ্য শিফট নির্ধারণ করুন এবং আসন কোটা পরিবর্তন করুন।</p>
+          <button className="btn btn-secondary" onClick={goClasses}>শ্রেণি তালিকা →</button>
         </div>
-
-        <div className="card">
-          <h3 style={{ fontSize: "16px", fontWeight: 700, marginBottom: "8px" }}>📑 ভর্তির আবেদনসমূহ (Applications)</h3>
-          <p style={{ fontSize: "13px", color: "var(--text-muted)", marginBottom: "16px" }}>
-            শিক্ষার্থীদের ১৭ অঙ্কের আইডি, অভিভাবকের নাম ও রিয়েল-টাইম স্ট্যাটাস যাচাই করুন।
-          </p>
+        <div className="action-card">
+          <div className="action-card-icon" style={{ background: "var(--success-light)" }}>📑</div>
+          <h3>আবেদনসমূহ (Applications)</h3>
+          <p>শিক্ষার্থীদের আইডি, অভিভাবকের নাম ও রিয়েল-টাইম স্ট্যাটাস যাচাই করুন।</p>
           <button className="btn btn-secondary" onClick={goApps}>
-            সকল আবেদন পর্যালোচনা করুন ({overview?.totalApplications ?? 0}) →
+            সকল আবেদন ({overview?.totalApplications ?? 0}) →
           </button>
         </div>
       </div>
@@ -961,76 +734,88 @@ function AdminClassesView({ notify }: { notify: (type: "ok" | "err", text: strin
 
   useEffect(() => {
     fetchClasses();
-    const interval = setInterval(fetchClasses, 6000);
-    return () => clearInterval(interval);
+    const t = setInterval(fetchClasses, 6000);
+    return () => clearInterval(t);
   }, [fetchClasses]);
 
   return (
     <div>
+      {/* Create form card */}
       <div className="card">
-        <h3 style={{ fontSize: "16px", fontWeight: 700, marginBottom: "14px" }}>
-          ➕ নতুন Class ও Shift তৈরি করুন
-        </h3>
-        <CreateClassInline
-          onSuccess={() => {
-            fetchClasses();
-            notify("ok", "নতুন ক্লাস/শিফট সফলভাবে তৈরি হয়েছে।");
-          }}
-        />
+        <div className="flex-between" style={{ marginBottom: 16 }}>
+          <div>
+            <div className="section-title">➕ নতুন Class ও Shift তৈরি করুন</div>
+            <div className="section-desc">শ্রেণির নাম, শিফট এবং আসন সংখ্যা নির্ধারণ করুন।</div>
+          </div>
+        </div>
+        <CreateClassInline onSuccess={() => { fetchClasses(); notify("ok", "নতুন ক্লাস/শিফট তৈরি হয়েছে।"); }} />
       </div>
 
-      <div className="card">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
+      {/* Classes table */}
+      <div className="card-flat">
+        <div className="card-header">
           <div>
-            <h2 style={{ fontSize: "18px", fontWeight: 700 }}>🏫 Class ও Shift তালিকা</h2>
-            <p style={{ fontSize: "13px", color: "var(--text-muted)" }}>
-              প্রতিটি শ্রেণির মর্নিং, ডে বা সান্ধ্য শিফটে আসন সংখ্যা ও বর্তমান অবস্থা।
-            </p>
+            <h2>🏫 Class ও Shift তালিকা</h2>
+            <p className="text-sm text-muted" style={{ marginTop: 2 }}>প্রতিটি শ্রেণির আসন সংখ্যা ও বর্তমান অবস্থা।</p>
+          </div>
+          <div className="live-pill" style={{ background: "#f0fdf4", borderColor: "#bbf7d0" }}>
+            <span className="pulse-dot" />
+            <span style={{ color: "var(--success-dark)", fontSize: 11 }}>Auto-refresh</span>
           </div>
         </div>
 
         {loading ? (
-          <div className="center-box">তথ্য লোড হচ্ছে...</div>
+          <div className="center-box">তথ্য লোড হচ্ছে…</div>
         ) : classes.length === 0 ? (
-          <div className="center-box">কোনো শ্রেণি পাওয়া যায়নি। উপরের ফর্ম দিয়ে তৈরি করুন।</div>
+          <div className="empty-state">
+            <span className="empty-state-icon">🏫</span>
+            <h3>কোনো শ্রেণি নেই</h3>
+            <p>উপরের ফর্ম দিয়ে প্রথম শ্রেণি তৈরি করুন।</p>
+          </div>
         ) : (
-          <div className="table-responsive">
+          <div className="table-wrapper" style={{ border: "none", borderRadius: 0 }}>
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Class ও Shift এর নাম</th>
+                  <th>শ্রেণির নাম</th>
                   <th>শিফট</th>
                   <th style={{ textAlign: "center" }}>মোট আসন</th>
-                  <th style={{ textAlign: "center" }}>Hold আসন</th>
+                  <th style={{ textAlign: "center" }}>Hold</th>
                   <th style={{ textAlign: "center" }}>নিশ্চিত</th>
-                  <th style={{ textAlign: "center" }}>খালি আসন</th>
+                  <th style={{ textAlign: "center" }}>খালি</th>
                   <th style={{ textAlign: "center" }}>অ্যাকশন</th>
                 </tr>
               </thead>
               <tbody>
-                {classes.map((c) => {
-                  const shift = c.shift || (c.name.includes("Day") ? "Day Shift" : c.name.includes("Evening") ? "Evening Shift" : "Morning Shift");
+                {classes.map(c => {
+                  const shift = c.shift || "Morning Shift";
+                  const rawName = c.name.replace(/ - (Morning Shift|Day Shift|Evening Shift)/, "");
                   return (
                     <tr key={c.id}>
-                      <td style={{ fontWeight: 600 }}>{c.name}</td>
+                      <td style={{ fontWeight: 600, color: "var(--text-main)" }}>{rawName}</td>
                       <td>
-                        <span className={`shift-badge ${shift.includes("Day") ? "shift-day" : shift.includes("Evening") ? "shift-evening" : "shift-morning"}`}>
-                          {shift}
+                        <span className={`shift-badge ${shiftClass(shift)}`}>
+                          {shiftIcon(shift)} {shift}
                         </span>
                       </td>
                       <td style={{ textAlign: "center", fontWeight: 600 }}>{c.totalSeats}</td>
-                      <td style={{ textAlign: "center", color: "var(--warning)", fontWeight: 600 }}>{c.heldSeats}</td>
-                      <td style={{ textAlign: "center", color: "var(--success)", fontWeight: 600 }}>{c.confirmedSeats}</td>
-                      <td style={{ textAlign: "center", color: c.availableSeats > 0 ? "var(--primary)" : "var(--danger)", fontWeight: 700 }}>
-                        {c.availableSeats}
+                      <td style={{ textAlign: "center" }}>
+                        <span style={{ color: c.heldSeats > 0 ? "var(--warning)" : "var(--text-faint)", fontWeight: 600 }}>
+                          {c.heldSeats}
+                        </span>
                       </td>
                       <td style={{ textAlign: "center" }}>
-                        <button
-                          type="button"
-                          className="btn btn-secondary"
-                          style={{ padding: "4px 10px", fontSize: "12px" }}
-                          onClick={() => setEditingClass(c)}
-                        >
+                        <span style={{ color: c.confirmedSeats > 0 ? "var(--success)" : "var(--text-faint)", fontWeight: 600 }}>
+                          {c.confirmedSeats}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: "center" }}>
+                        <span className={`seat-pill ${c.availableSeats > 0 ? "available" : "full"}`}>
+                          {c.availableSeats}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: "center" }}>
+                        <button className="btn btn-secondary btn-xs" onClick={() => setEditingClass(c)}>
                           ✏️ এডিট
                         </button>
                       </td>
@@ -1047,11 +832,7 @@ function AdminClassesView({ notify }: { notify: (type: "ok" | "err", text: strin
         <EditClassModal
           cls={editingClass}
           onClose={() => setEditingClass(null)}
-          onSuccess={() => {
-            setEditingClass(null);
-            fetchClasses();
-            notify("ok", "ক্লাসের তথ্য সফলভাবে আপডেট হয়েছে।");
-          }}
+          onSuccess={() => { setEditingClass(null); fetchClasses(); notify("ok", "ক্লাস আপডেট হয়েছে।"); }}
         />
       )}
     </div>
@@ -1068,17 +849,11 @@ function CreateClassInline({ onSuccess }: { onSuccess: () => void }) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const seats = parseInt(totalSeats, 10);
-    if (isNaN(seats) || seats <= 0) {
-      setError("আসন সংখ্যা ০-এর বেশি পূর্ণসংখ্যা হতে হবে।");
-      return;
-    }
-    setError(null);
-    setLoading(true);
+    if (isNaN(seats) || seats <= 0) { setError("আসন সংখ্যা ০-এর বেশি হতে হবে।"); return; }
+    setError(null); setLoading(true);
     try {
       await api.adminCreateClass(name, shift, seats);
-      setName("");
-      setTotalSeats("60");
-      onSuccess();
+      setName(""); setTotalSeats("60"); onSuccess();
     } catch (err) {
       setError(errMsg(err));
     } finally {
@@ -1087,138 +862,39 @@ function CreateClassInline({ onSuccess }: { onSuccess: () => void }) {
   };
 
   return (
-    <form onSubmit={handleSubmit} style={{ display: "grid", gridTemplateColumns: "2fr 1.5fr 1fr auto", gap: "12px", alignItems: "end" }}>
-      {error && <div className="error-box" style={{ gridColumn: "1 / -1" }}>{error}</div>}
-
-      <div className="form-group" style={{ marginBottom: 0 }}>
-        <label>Class-এর নাম *</label>
-        <input
-          className="form-input"
-          type="text"
-          required
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="যেমন: Class 6"
-        />
-      </div>
-
-      <div className="form-group" style={{ marginBottom: 0 }}>
-        <label>শিফট</label>
-        <select className="form-input" value={shift} onChange={(e) => setShift(e.target.value)}>
-          <option value="Morning Shift">Morning Shift (প্রভাতি)</option>
-          <option value="Day Shift">Day Shift (দিবা)</option>
-          <option value="Evening Shift">Evening Shift (সান্ধ্য)</option>
-        </select>
-      </div>
-
-      <div className="form-group" style={{ marginBottom: 0 }}>
-        <label>মোট আসন</label>
-        <input
-          className="form-input"
-          type="number"
-          required
-          min={1}
-          value={totalSeats}
-          onChange={(e) => setTotalSeats(e.target.value)}
-          placeholder="120"
-        />
-      </div>
-
-      <button className="btn btn-primary" style={{ height: "42px" }} disabled={loading || !name.trim()}>
-        {loading ? "তৈরি হচ্ছে..." : "Class তৈরি করুন"}
-      </button>
-    </form>
-  );
-}
-
-
-
-function CreateClassModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
-  const [name, setName] = useState("");
-  const [shift, setShift] = useState("Morning Shift");
-  const [totalSeats, setTotalSeats] = useState("60");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const seats = parseInt(totalSeats, 10);
-    if (isNaN(seats) || seats <= 0) {
-      setError("আসন সংখ্যা ০-এর বেশি পূর্ণসংখ্যা হতে হবে।");
-      return;
-    }
-    setError(null);
-    setLoading(true);
-    try {
-      await api.adminCreateClass(name, shift, seats);
-      onSuccess();
-    } catch (err) {
-      setError(errMsg(err));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="modal-overlay">
-      <div className="modal-dialog">
-        <div className="modal-header">
-          <h3>➕ নতুন Class ও Shift তৈরি করুন</h3>
-          <button type="button" onClick={onClose} style={{ background: "none", border: "none", fontSize: "18px", cursor: "pointer" }}>✕</button>
+    <form onSubmit={handleSubmit}>
+      {error && <div className="error-box mb-16">{error}</div>}
+      <div className="inline-form-row">
+        <div className="form-group" style={{ marginBottom: 0 }}>
+          <label className="form-label">Class-এর নাম *</label>
+          <input className="form-input" type="text" required value={name}
+            onChange={e => setName(e.target.value)} placeholder="যেমন: Class 6" />
         </div>
-        <form onSubmit={handleSubmit}>
-          <div className="modal-body">
-            {error && <div className="error-box" style={{ marginBottom: "16px" }}>{error}</div>}
-
-            <div className="form-group">
-              <label>Class-এর নাম (যেমন: Class 6, Class 7)</label>
-              <input
-                className="form-input"
-                type="text"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="যেমন: Class 6"
-              />
-            </div>
-
-            <div className="form-group">
-              <label>শিফট (Shift)</label>
-              <select className="form-input" value={shift} onChange={(e) => setShift(e.target.value)}>
-                <option value="Morning Shift">Morning Shift (প্রভাতি শিফট)</option>
-                <option value="Day Shift">Day Shift (দিবা শিফট)</option>
-                <option value="Evening Shift">Evening Shift (সান্ধ্য শিফট)</option>
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label>মোট আসন সংখ্যা (Total Seats)</label>
-              <input
-                className="form-input"
-                type="number"
-                required
-                min={1}
-                value={totalSeats}
-                onChange={(e) => setTotalSeats(e.target.value)}
-                placeholder="যেমন: 120"
-              />
-            </div>
-          </div>
-          <div className="modal-footer">
-            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>বাতিল</button>
-            <button className="btn btn-primary" disabled={loading}>
-              {loading ? "তৈরি হচ্ছে..." : "Class তৈরি করুন"}
-            </button>
-          </div>
-        </form>
+        <div className="form-group" style={{ marginBottom: 0 }}>
+          <label className="form-label">শিফট</label>
+          <select className="form-input form-select" value={shift} onChange={e => setShift(e.target.value)}>
+            <option value="Morning Shift">🌅 Morning Shift (প্রভাতি)</option>
+            <option value="Day Shift">🌤️ Day Shift (দিবা)</option>
+            <option value="Evening Shift">🌙 Evening Shift (সান্ধ্য)</option>
+          </select>
+        </div>
+        <div className="form-group" style={{ marginBottom: 0 }}>
+          <label className="form-label">মোট আসন</label>
+          <input className="form-input" type="number" required min={1} value={totalSeats}
+            onChange={e => setTotalSeats(e.target.value)} placeholder="120" />
+        </div>
+        <button className="btn btn-primary" style={{ height: 42, alignSelf: "flex-end" }}
+          disabled={loading || !name.trim()}>
+          {loading ? "তৈরি হচ্ছে…" : "তৈরি করুন"}
+        </button>
       </div>
-    </div>
+    </form>
   );
 }
 
 function EditClassModal({ cls, onClose, onSuccess }: { cls: ClassInfo; onClose: () => void; onSuccess: () => void }) {
   const [name, setName] = useState(cls.name.replace(/ - (Morning Shift|Day Shift|Evening Shift)/, ""));
-  const [shift, setShift] = useState(cls.shift || (cls.name.includes("Day") ? "Day Shift" : cls.name.includes("Evening") ? "Evening Shift" : "Morning Shift"));
+  const [shift, setShift] = useState(cls.shift || "Morning Shift");
   const [totalSeats, setTotalSeats] = useState(cls.totalSeats.toString());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1226,12 +902,8 @@ function EditClassModal({ cls, onClose, onSuccess }: { cls: ClassInfo; onClose: 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const seats = parseInt(totalSeats, 10);
-    if (isNaN(seats) || seats <= 0) {
-      setError("আসন সংখ্যা ০-এর বেশি পূর্ণসংখ্যা হতে হবে।");
-      return;
-    }
-    setError(null);
-    setLoading(true);
+    if (isNaN(seats) || seats <= 0) { setError("আসন সংখ্যা ০-এর বেশি হতে হবে।"); return; }
+    setError(null); setLoading(true);
     try {
       await api.adminUpdateClass(cls.id, name, shift, seats);
       onSuccess();
@@ -1246,49 +918,35 @@ function EditClassModal({ cls, onClose, onSuccess }: { cls: ClassInfo; onClose: 
     <div className="modal-overlay">
       <div className="modal-dialog">
         <div className="modal-header">
-          <h3>✏️ Class ও Shift সম্পাদনা (Edit)</h3>
-          <button type="button" onClick={onClose} style={{ background: "none", border: "none", fontSize: "18px", cursor: "pointer" }}>✕</button>
+          <h3>✏️ Class সম্পাদনা</h3>
+          <button className="modal-close" type="button" onClick={onClose}>✕</button>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
-            {error && <div className="error-box" style={{ marginBottom: "16px" }}>{error}</div>}
-
+            {error && <div className="error-box mb-16">{error}</div>}
             <div className="form-group">
-              <label>Class-এর নাম</label>
-              <input
-                className="form-input"
-                type="text"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
+              <label className="form-label">Class-এর নাম</label>
+              <input className="form-input" type="text" required value={name}
+                onChange={e => setName(e.target.value)} />
             </div>
-
             <div className="form-group">
-              <label>শিফট</label>
-              <select className="form-input" value={shift} onChange={(e) => setShift(e.target.value)}>
-                <option value="Morning Shift">Morning Shift (প্রভাতি)</option>
-                <option value="Day Shift">Day Shift (দিবা)</option>
-                <option value="Evening Shift">Evening Shift (সান্ধ্য)</option>
+              <label className="form-label">শিফট</label>
+              <select className="form-input form-select" value={shift} onChange={e => setShift(e.target.value)}>
+                <option value="Morning Shift">🌅 Morning Shift (প্রভাতি)</option>
+                <option value="Day Shift">🌤️ Day Shift (দিবা)</option>
+                <option value="Evening Shift">🌙 Evening Shift (সান্ধ্য)</option>
               </select>
             </div>
-
             <div className="form-group">
-              <label>মোট আসন সংখ্যা (বর্তমানে সক্রিয়: {cls.heldSeats + cls.confirmedSeats})</label>
-              <input
-                className="form-input"
-                type="number"
-                required
-                min={cls.heldSeats + cls.confirmedSeats}
-                value={totalSeats}
-                onChange={(e) => setTotalSeats(e.target.value)}
-              />
+              <label className="form-label">মোট আসন (সক্রিয়: {cls.heldSeats + cls.confirmedSeats})</label>
+              <input className="form-input" type="number" required min={cls.heldSeats + cls.confirmedSeats}
+                value={totalSeats} onChange={e => setTotalSeats(e.target.value)} />
             </div>
           </div>
           <div className="modal-footer">
             <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>বাতিল</button>
             <button className="btn btn-primary" disabled={loading}>
-              {loading ? "আপডেট হচ্ছে..." : "সংরক্ষণ করুন"}
+              {loading ? "আপডেট হচ্ছে…" : "সংরক্ষণ করুন"}
             </button>
           </div>
         </form>
@@ -1316,103 +974,110 @@ function AdminApplicationsView({ notify }: { notify: (type: "ok" | "err", text: 
 
   useEffect(() => {
     fetchApps();
-    const interval = setInterval(fetchApps, 6000);
-    return () => clearInterval(interval);
+    const t = setInterval(fetchApps, 6000);
+    return () => clearInterval(t);
   }, [fetchApps]);
 
-  const filtered = apps.filter((a) => {
+  const filtered = apps.filter(a => {
     if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
     return a.studentId.includes(term) || (a.parentName && a.parentName.toLowerCase().includes(term));
   });
 
+  const statusLabels: Record<string, string> = {
+    ALL: "সকল", HELD: "HELD", CONFIRMED: "CONFIRMED", EXPIRED: "EXPIRED", CANCELLED: "CANCELLED"
+  };
+
   return (
     <div>
-      <div className="card">
-        <h2 style={{ fontSize: "18px", fontWeight: 700, marginBottom: "8px" }}>📑 সকল ভর্তির আবেদন ব্যবস্থাপনা</h2>
-        <p style={{ fontSize: "13px", color: "var(--text-muted)", marginBottom: "16px" }}>
-          সকল শিক্ষার্থী এবং তাদের আবেদনের রিয়েল-টাইম অবস্থা ও সময়সীমা নিচে প্রদর্শিত হচ্ছে।
-        </p>
-
-        {/* Filter Pills */}
-        <div className="filter-bar">
-          {["ALL", "HELD", "CONFIRMED", "EXPIRED", "CANCELLED"].map((st) => (
-            <button
-              key={st}
-              className={`filter-pill ${statusFilter === st ? "active" : ""}`}
-              onClick={() => setStatusFilter(st)}
-            >
-              {st === "ALL" ? "সকল আবেদন" : st}
-            </button>
-          ))}
-        </div>
-
-        {/* Search */}
-        <div style={{ marginBottom: "16px" }}>
-          <input
-            className="form-input"
-            type="text"
-            placeholder="🔍 শিক্ষার্থী আইডি বা অভিভাবকের নাম দিয়ে খুঁজুন..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-
-        {loading ? (
-          <div className="center-box">আবেদনগুলো লোড হচ্ছে...</div>
-        ) : filtered.length === 0 ? (
-          <div className="center-box">কোনো আবেদন পাওয়া যায়নি।</div>
-        ) : (
-          <div className="table-responsive">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Hold ID</th>
-                  <th>শিক্ষার্থী আইডি (17 Digit)</th>
-                  <th>Class ও Shift</th>
-                  <th>অভিভাবক</th>
-                  <th style={{ textAlign: "center" }}>অবস্থা</th>
-                  <th>মেয়াদ শেষ / নিশ্চিতের সময়</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((a) => (
-                  <tr key={a.holdId}>
-                    <td><code>{a.holdId}</code></td>
-                    <td style={{ fontWeight: 600 }}>{a.studentId}</td>
-                    <td>{a.className} - {a.shift}</td>
-                    <td>{a.parentName || "—"}</td>
-                    <td style={{ textAlign: "center" }}>
-                      <span className={`status-badge status-${a.status.toLowerCase()}`}>
-                        {a.status}
-                      </span>
-                    </td>
-                    <td style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-                      {a.status === "CONFIRMED" && a.confirmedAt
-                        ? `নিশ্চিত: ${new Date(a.confirmedAt).toLocaleTimeString()}`
-                        : `মেয়াদ: ${new Date(a.expiresAt).toLocaleTimeString()}`}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      <div className="card-flat">
+        <div className="card-header">
+          <div>
+            <h2>📑 সকল ভর্তির আবেদন</h2>
+            <p className="text-sm text-muted" style={{ marginTop: 2 }}>
+              রিয়েল-টাইমে সকল শিক্ষার্থীর আবেদনের অবস্থা।
+            </p>
           </div>
-        )}
+          <div className="live-pill" style={{ background: "#f0fdf4", borderColor: "#bbf7d0" }}>
+            <span className="pulse-dot" />
+            <span style={{ color: "var(--success-dark)", fontSize: 11 }}>Live</span>
+          </div>
+        </div>
+
+        <div className="card-body">
+          {/* Filters */}
+          <div className="filter-bar">
+            {["ALL", "HELD", "CONFIRMED", "EXPIRED", "CANCELLED"].map(st => (
+              <button key={st} className={`filter-pill ${statusFilter === st ? "active" : ""}`}
+                onClick={() => setStatusFilter(st)}>
+                {statusLabels[st]}
+              </button>
+            ))}
+          </div>
+
+          {/* Search */}
+          <input className="form-input" type="text" style={{ maxWidth: 400, marginBottom: 16 }}
+            placeholder="🔍 শিক্ষার্থী আইডি বা অভিভাবকের নাম…"
+            value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+
+          {loading ? (
+            <div className="center-box">আবেদন লোড হচ্ছে…</div>
+          ) : filtered.length === 0 ? (
+            <div className="empty-state">
+              <span className="empty-state-icon">📋</span>
+              <h3>কোনো আবেদন নেই</h3>
+              <p>অনুসন্ধানের ফলাফল খালি।</p>
+            </div>
+          ) : (
+            <div className="table-wrapper">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Hold ID</th>
+                    <th>শিক্ষার্থী আইডি</th>
+                    <th>Class ও Shift</th>
+                    <th>অভিভাবক</th>
+                    <th style={{ textAlign: "center" }}>স্ট্যাটাস</th>
+                    <th>সময়</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map(a => (
+                    <tr key={a.holdId}>
+                      <td><code style={{ fontSize: 11, background: "#f1f5f9", padding: "2px 6px", borderRadius: 4 }}>{a.holdId.slice(0, 12)}…</code></td>
+                      <td style={{ fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{a.studentId}</td>
+                      <td>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>{a.className}</div>
+                        <span className={`shift-badge ${shiftClass(a.shift || "")}`} style={{ marginTop: 2 }}>
+                          {a.shift}
+                        </span>
+                      </td>
+                      <td style={{ color: "var(--text-secondary)" }}>{a.parentName || "—"}</td>
+                      <td style={{ textAlign: "center" }}>
+                        <span className={`status-badge ${a.status}`}>{a.status}</span>
+                      </td>
+                      <td style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                        {a.status === "CONFIRMED" && a.confirmedAt
+                          ? `✅ ${new Date(a.confirmedAt).toLocaleString("bn-BD")}`
+                          : `⏱ ${new Date(a.expiresAt).toLocaleTimeString("bn-BD")}`}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-// ==========================================
-// 4. Class List & Apply (Parent / Public View)
-// ==========================================
+// ============================================================
+// 4. CLASS LIST (Parent / Public)
+// ============================================================
 
-function ClassList({
-  studentId,
-  notify,
-  goMine,
-  goSetId,
-}: {
+function ClassList({ studentId, notify, goMine, goSetId }: {
   studentId: string;
   notify: (type: "ok" | "err", text: string) => void;
   goMine: () => void;
@@ -1426,34 +1091,27 @@ function ClassList({
   const fetchClasses = useCallback(async () => {
     try {
       const data = await api.listClasses();
-      setClasses(data);
-      setError(null);
-    } catch (err) {
+      setClasses(data); setError(null);
+    } catch {
       setError("Server-এর সাথে যোগাযোগ করা যাচ্ছে না।");
-      notify("err", errMsg(err));
     } finally {
       setLoading(false);
     }
-  }, [notify]);
+  }, []);
 
   useEffect(() => {
     fetchClasses();
-    const interval = setInterval(fetchClasses, 5000);
-    return () => clearInterval(interval);
+    const t = setInterval(fetchClasses, 5000);
+    return () => clearInterval(t);
   }, [fetchClasses]);
 
   const handleApply = async (classId: string, className: string) => {
-    if (!studentId) {
-      notify("err", "আগে পেজের উপরে শিক্ষার্থীর ১৭ অঙ্কের জন্ম নিবন্ধন নম্বর সেট করুন।");
-      goSetId();
-      return;
-    }
+    if (!studentId) { notify("err", "আগে শিক্ষার্থীর ১৭ অঙ্কের জন্ম নিবন্ধন নম্বর সেট করুন।"); goSetId(); return; }
     setApplying(classId);
     try {
       await api.apply(classId, studentId);
-      notify("ok", `"${className}"-এ সিট সাময়িকভাবে সংরক্ষিত হয়েছে! মেয়াদ শেষ হওয়ার আগেই ফি জমা দিন।`);
-      fetchClasses();
-      goMine();
+      notify("ok", `"${className}"-এ আসন সাময়িকভাবে সংরক্ষিত হয়েছে! মেয়াদ শেষের আগেই নিশ্চিত করুন।`);
+      fetchClasses(); goMine();
     } catch (err) {
       notify("err", errMsg(err));
     } finally {
@@ -1462,69 +1120,89 @@ function ClassList({
   };
 
   return (
-    <div className="card">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "8px" }}>
+    <div className="card-flat">
+      <div className="card-header">
         <div>
-          <h2 style={{ fontSize: "18px", fontWeight: 700 }}>📋 উপলব্ধ শ্রেণির তালিকা ও আসন পরিস্থিতি</h2>
-          <p style={{ fontSize: "13px", color: "var(--text-muted)" }}>
+          <h2>📋 উপলব্ধ শ্রেণির তালিকা</h2>
+          <p className="text-sm text-muted" style={{ marginTop: 2 }}>
             আগে আবেদন করলে আগে পাবেন — আবেদন করলে নির্দিষ্ট সময়ের জন্য আসন hold থাকবে।
           </p>
+        </div>
+        <div className="live-pill" style={{ background: "#f0fdf4", borderColor: "#bbf7d0" }}>
+          <span className="pulse-dot" />
+          <span style={{ color: "var(--success-dark)", fontSize: 11 }}>Auto-refresh 5s</span>
         </div>
       </div>
 
       {error && (
-        <div className="error-box" style={{ marginBottom: "16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span>{error}</span>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            style={{ padding: "4px 8px", fontSize: "12px" }}
-            onClick={fetchClasses}
-          >
-            আবার চেষ্টা করুন
-          </button>
+        <div className="card-body">
+          <div className="error-box" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span>{error}</span>
+            <button className="btn btn-secondary btn-xs" onClick={fetchClasses}>আবার চেষ্টা করুন</button>
+          </div>
         </div>
       )}
 
       {loading ? (
-        <div className="center-box">শ্রেণির তথ্য লোড হচ্ছে...</div>
+        <div className="center-box">শ্রেণির তথ্য লোড হচ্ছে…</div>
       ) : classes.length === 0 ? (
-        <div className="center-box">কোনো শ্রেণি পাওয়া যায়নি।</div>
+        <div className="empty-state">
+          <span className="empty-state-icon">🏫</span>
+          <h3>কোনো শ্রেণি পাওয়া যায়নি</h3>
+        </div>
       ) : (
-        <div className="table-responsive">
+        <div className="table-wrapper" style={{ border: "none", borderRadius: 0 }}>
           <table className="data-table">
             <thead>
               <tr>
-                <th>শ্রেণি ও শিফটের নাম</th>
-                <th style={{ textAlign: "center" }}>মোট আসন</th>
-                <th style={{ textAlign: "center" }}>Hold এ আছে</th>
-                <th style={{ textAlign: "center" }}>ভর্তি নিশ্চিত</th>
-                <th style={{ textAlign: "center" }}>খালি আসন</th>
+                <th>শ্রেণি ও শিফট</th>
+                <th style={{ textAlign: "center" }}>মোট</th>
+                <th style={{ textAlign: "center" }}>Hold</th>
+                <th style={{ textAlign: "center" }}>নিশ্চিত</th>
+                <th style={{ textAlign: "center" }}>খালি</th>
                 <th style={{ textAlign: "center" }}>আবেদন</th>
               </tr>
             </thead>
             <tbody>
-              {classes.map((c) => (
-                <tr key={c.id}>
-                  <td style={{ fontWeight: 600 }}>{c.name}</td>
-                  <td style={{ textAlign: "center" }}>{c.totalSeats}</td>
-                  <td style={{ textAlign: "center", color: "var(--warning)", fontWeight: 600 }}>{c.heldSeats}</td>
-                  <td style={{ textAlign: "center", color: "var(--success)", fontWeight: 600 }}>{c.confirmedSeats}</td>
-                  <td style={{ textAlign: "center", fontWeight: 700, color: c.availableSeats > 0 ? "var(--primary)" : "var(--danger)" }}>
-                    {c.availableSeats}
-                  </td>
-                  <td style={{ textAlign: "center" }}>
-                    <button
-                      className="btn btn-primary"
-                      style={{ padding: "6px 14px", fontSize: "13px" }}
-                      disabled={c.availableSeats === 0 || applying === c.id}
-                      onClick={() => handleApply(c.id, c.name)}
-                    >
-                      {applying === c.id ? "বুকিং হচ্ছে..." : c.availableSeats === 0 ? "Seat নেই" : "আবেদন করুন"}
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {classes.map(c => {
+                const shift = c.shift || "Morning Shift";
+                const rawName = c.name.replace(/ - (Morning Shift|Day Shift|Evening Shift)/, "");
+                return (
+                  <tr key={c.id}>
+                    <td>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: "var(--text-main)" }}>{rawName}</div>
+                      <span className={`shift-badge ${shiftClass(shift)}`} style={{ marginTop: 3 }}>
+                        {shiftIcon(shift)} {shift}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: "center", fontWeight: 600, color: "var(--text-secondary)" }}>{c.totalSeats}</td>
+                    <td style={{ textAlign: "center" }}>
+                      <span style={{ color: c.heldSeats > 0 ? "var(--warning)" : "var(--text-faint)", fontWeight: 600 }}>
+                        {c.heldSeats}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: "center" }}>
+                      <span style={{ color: c.confirmedSeats > 0 ? "var(--success)" : "var(--text-faint)", fontWeight: 600 }}>
+                        {c.confirmedSeats}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: "center" }}>
+                      <span className={`seat-pill ${c.availableSeats > 0 ? "available" : "full"}`}>
+                        {c.availableSeats}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: "center" }}>
+                      <button
+                        className={`btn ${c.availableSeats > 0 ? "btn-primary" : "btn-secondary"} btn-sm`}
+                        disabled={c.availableSeats === 0 || applying === c.id}
+                        onClick={() => handleApply(c.id, rawName)}
+                      >
+                        {applying === c.id ? "বুকিং…" : c.availableSeats === 0 ? "Seat নেই" : "আবেদন করুন"}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -1533,15 +1211,11 @@ function ClassList({
   );
 }
 
-// ==========================================
-// 5. My Holds & Countdown Timer (Parent View)
-// ==========================================
+// ============================================================
+// 5. MY HOLDS & COUNTDOWN
+// ============================================================
 
-function MyHoldsView({
-  studentId,
-  notify,
-  goClasses,
-}: {
+function MyHoldsView({ studentId, notify, goClasses }: {
   studentId: string;
   notify: (type: "ok" | "err", text: string) => void;
   goClasses: () => void;
@@ -1551,11 +1225,7 @@ function MyHoldsView({
   const [selectedSlip, setSelectedSlip] = useState<MyHold | null>(null);
 
   const fetchHolds = useCallback(async () => {
-    if (!studentId) {
-      setHolds([]);
-      setLoading(false);
-      return;
-    }
+    if (!studentId) { setHolds([]); setLoading(false); return; }
     try {
       const data = await api.myHolds(studentId);
       setHolds(data);
@@ -1568,135 +1238,107 @@ function MyHoldsView({
 
   useEffect(() => {
     fetchHolds();
-    const interval = setInterval(fetchHolds, 5000);
-    return () => clearInterval(interval);
+    const t = setInterval(fetchHolds, 5000);
+    return () => clearInterval(t);
   }, [fetchHolds]);
 
   if (!studentId) {
     return (
-      <div className="card center-box">
-        <p style={{ fontSize: "16px", fontWeight: 600, color: "var(--danger)", marginBottom: "8px" }}>
-          ⚠️ শিক্ষার্থীর ১৭ অঙ্কের জন্ম নিবন্ধন নম্বর সেট করা নেই।
-        </p>
-        <p style={{ color: "var(--text-muted)", fontSize: "13px" }}>
-          পেজের উপরের ঘরে শিক্ষার্থীর ১৭ অঙ্কের নম্বর লিখে "সেট করুন" চাপুন।
-        </p>
+      <div className="card">
+        <div className="empty-state">
+          <span className="empty-state-icon">🪪</span>
+          <h3>শিক্ষার্থীর আইডি সেট নেই</h3>
+          <p>পেজের উপরের ঘরে ১৭ অঙ্কের জন্ম নিবন্ধন নম্বর লিখে "সেট করুন" চাপুন।</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="card">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "8px" }}>
-        <div>
-          <h2 style={{ fontSize: "18px", fontWeight: 700 }}>🎓 শিক্ষার্থী {studentId}-এর আবেদনসমূহ</h2>
-          <p style={{ fontSize: "13px", color: "var(--text-muted)" }}>
-            নিচের তালিকায় আপনার চলমান আসন সংরক্ষণ এবং নিশ্চিত ভর্তির বিবরণ দেখুন।
-          </p>
-        </div>
-        <button className="btn btn-secondary" onClick={goClasses}>
-          ➕ অন্য শ্রেণিতে আবেদন করুন
-        </button>
-      </div>
-
-      {loading ? (
-        <div className="center-box">আবেদনের তথ্য লোড হচ্ছে...</div>
-      ) : holds.length === 0 ? (
-        <div className="center-box">
-          <p style={{ marginBottom: "12px", color: "var(--text-muted)" }}>এই শিক্ষার্থীর নামে কোনো আবেদন পাওয়া যায়নি।</p>
-          <button className="btn btn-primary" onClick={goClasses}>
-            শ্রেণি তালিকা থেকে আবেদন করুন →
+    <div>
+      <div className="card-flat">
+        <div className="card-header">
+          <div>
+            <h2>🎓 আমার আবেদনসমূহ</h2>
+            <p className="text-sm text-muted" style={{ marginTop: 2 }}>
+              শিক্ষার্থী আইডি: <code>{studentId}</code>
+            </p>
+          </div>
+          <button className="btn btn-primary btn-sm" onClick={goClasses}>
+            ➕ নতুন আবেদন
           </button>
         </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          {holds.map((h) => (
-            <HoldCard
-              key={h.holdId}
-              hold={h}
-              studentId={studentId}
-              notify={notify}
-              onRefresh={fetchHolds}
-              onViewSlip={() => setSelectedSlip(h)}
-            />
-          ))}
+
+        <div className="card-body">
+          {loading ? (
+            <div className="center-box">আবেদনের তথ্য লোড হচ্ছে…</div>
+          ) : holds.length === 0 ? (
+            <div className="empty-state">
+              <span className="empty-state-icon">📭</span>
+              <h3>কোনো আবেদন নেই</h3>
+              <p>এই শিক্ষার্থীর নামে কোনো আবেদন পাওয়া যায়নি।</p>
+              <button className="btn btn-primary" onClick={goClasses}>শ্রেণি তালিকা থেকে আবেদন করুন →</button>
+            </div>
+          ) : (
+            <div>
+              {holds.map(h => (
+                <HoldCard key={h.holdId} hold={h} studentId={studentId}
+                  notify={notify} onRefresh={fetchHolds}
+                  onViewSlip={() => setSelectedSlip(h)} />
+              ))}
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {selectedSlip && (
-        <AdmissionSlipModal
-          hold={selectedSlip}
-          studentId={studentId}
-          onClose={() => setSelectedSlip(null)}
-        />
+        <AdmissionSlipModal hold={selectedSlip} studentId={studentId} onClose={() => setSelectedSlip(null)} />
       )}
     </div>
   );
 }
 
-function HoldCard({
-  hold,
-  studentId,
-  notify,
-  onRefresh,
-  onViewSlip,
-}: {
-  hold: MyHold;
-  studentId: string;
+function HoldCard({ hold, studentId, notify, onRefresh, onViewSlip }: {
+  hold: MyHold; studentId: string;
   notify: (type: "ok" | "err", text: string) => void;
-  onRefresh: () => void;
-  onViewSlip: () => void;
+  onRefresh: () => void; onViewSlip: () => void;
 }) {
   const remainingSeconds = useCountdown(hold.expiresAt);
   const isExpired = remainingSeconds <= 0;
   const [processing, setProcessing] = useState(false);
-
-  // If time has expired and status was HELD, effectively it is EXPIRED
   const effectiveStatus = hold.status === "HELD" && isExpired ? "EXPIRED" : hold.status;
 
   const handleConfirm = async () => {
     setProcessing(true);
     try {
       await api.confirm(hold.holdId, studentId);
-      notify("ok", `ভর্তি ফি সফলভাবে জমা হয়েছে! আসন নিশ্চিত করা হয়েছে।`);
+      notify("ok", "ভর্তি ফি সফলভাবে জমা হয়েছে! আসন নিশ্চিত করা হয়েছে।");
       onRefresh();
-    } catch (err) {
-      notify("err", errMsg(err));
-    } finally {
-      setProcessing(false);
-    }
+    } catch (err) { notify("err", errMsg(err)); }
+    finally { setProcessing(false); }
   };
 
   const handleCancel = async () => {
-    if (!confirm("আপনি কি নিশ্চিতভাবে এই আসনটি বাতিল করতে চান? আসনটি অন্যদের জন্য উন্মুক্ত হয়ে যাবে।")) {
-      return;
-    }
+    if (!confirm("আপনি কি নিশ্চিতভাবে আসনটি বাতিল করতে চান?")) return;
     setProcessing(true);
     try {
       await api.cancel(hold.holdId, studentId);
-      notify("ok", "আসন সংরক্ষণ সফলভাবে বাতিল করা হয়েছে।");
+      notify("ok", "আসন সংরক্ষণ বাতিল করা হয়েছে।");
       onRefresh();
-    } catch (err) {
-      notify("err", errMsg(err));
-    } finally {
-      setProcessing(false);
-    }
+    } catch (err) { notify("err", errMsg(err)); }
+    finally { setProcessing(false); }
   };
 
   return (
-    <div className="hold-card">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "8px" }}>
+    <div className={`hold-card ${effectiveStatus}`}>
+      <div className="hold-card-stripe" />
+      <div className="hold-card-body">
         <div>
-          <div style={{ fontSize: "16px", fontWeight: 700 }}>{hold.className}</div>
-          <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "2px" }}>
-            Hold ID: <code>{hold.holdId}</code>
-          </div>
+          <div className="hold-class-name">{hold.className}</div>
+          <div className="hold-id-line">Hold ID: <code>{hold.holdId}</code></div>
         </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <span className={`status-badge status-${effectiveStatus.toLowerCase()}`}>
-            {effectiveStatus}
-          </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span className={`status-badge ${effectiveStatus}`}>{effectiveStatus}</span>
           {effectiveStatus === "HELD" && (
             <span className={`countdown-timer ${remainingSeconds < 60 ? "urgent" : ""}`}>
               ⏱️ {fmt(remainingSeconds)}
@@ -1704,91 +1346,61 @@ function HoldCard({
           )}
         </div>
       </div>
-
-      <div style={{ marginTop: "14px", display: "flex", justifyContent: "flex-end", gap: "8px", flexWrap: "wrap" }}>
+      <div className="hold-card-actions">
         {effectiveStatus === "HELD" && (
           <>
-            <button
-              className="btn btn-danger"
-              style={{ padding: "6px 12px", fontSize: "12px" }}
-              disabled={processing}
-              onClick={handleCancel}
-            >
+            <button className="btn btn-danger-outline btn-sm" disabled={processing} onClick={handleCancel}>
               বাতিল
             </button>
-            <button
-              className="btn btn-success"
-              style={{ padding: "6px 14px", fontSize: "13px" }}
-              disabled={processing || isExpired}
-              onClick={handleConfirm}
-            >
-              {processing ? "প্রক্রিয়াকরণ..." : "ভর্তি ফি দিন (Confirm)"}
+            <button className="btn btn-success btn-sm" disabled={processing || isExpired} onClick={handleConfirm}>
+              {processing ? "প্রক্রিয়াকরণ…" : "✅ ভর্তি নিশ্চিত করুন"}
             </button>
           </>
         )}
-
         {effectiveStatus === "CONFIRMED" && (
-          <button
-            type="button"
-            className="btn btn-primary"
-            style={{ padding: "6px 12px", fontSize: "12px" }}
-            onClick={onViewSlip}
-          >
-            🧾 ভর্তি রশিদ দেখুন (Slip)
+          <button type="button" className="btn btn-primary btn-sm" onClick={onViewSlip}>
+            🧾 ভর্তি রশিদ দেখুন
           </button>
+        )}
+        {(effectiveStatus === "EXPIRED" || effectiveStatus === "CANCELLED") && (
+          <span className="text-muted text-sm">— এই আবেদনটি আর সক্রিয় নেই।</span>
         )}
       </div>
     </div>
   );
 }
 
-function AdmissionSlipModal({
-  hold,
-  studentId,
-  onClose,
-}: {
-  hold: MyHold;
-  studentId: string;
-  onClose: () => void;
-}) {
+function AdmissionSlipModal({ hold, studentId, onClose }: { hold: MyHold; studentId: string; onClose: () => void }) {
   return (
     <div className="modal-overlay">
       <div className="modal-dialog">
         <div className="modal-header">
-          <h3>🎓 ভর্তি নিশ্চিতকরণ রশিদ (Admission Slip)</h3>
-          <button type="button" onClick={onClose} style={{ background: "none", border: "none", fontSize: "18px", cursor: "pointer" }}>✕</button>
+          <h3>🎓 ভর্তি নিশ্চিতকরণ রশিদ</h3>
+          <button className="modal-close" type="button" onClick={onClose}>✕</button>
         </div>
         <div className="modal-body">
-          <div style={{ textAlign: "center", paddingBottom: "16px", borderBottom: "2px dashed var(--border)" }}>
-            <div style={{ fontSize: "28px" }}>🏫</div>
-            <h4 style={{ fontSize: "17px", fontWeight: 700 }}>অনলাইন স্কুল ভর্তি ব্যবস্থা</h4>
-            <span className="status-badge status-confirmed" style={{ marginTop: "6px" }}>ভর্তি সফল ও নিশ্চিত</span>
+          <div className="receipt-header">
+            <div style={{ fontSize: 36 }}>🏫</div>
+            <h4>অনলাইন স্কুল ভর্তি ব্যবস্থা</h4>
+            <span className="status-badge CONFIRMED" style={{ marginTop: 6 }}>✅ ভর্তি সফল ও নিশ্চিত</span>
           </div>
-
-          <div style={{ marginTop: "16px" }}>
-            <div className="receipt-row">
-              <span className="receipt-label">শিক্ষার্থীর জন্ম নিবন্ধন নম্বর:</span>
-              <span className="receipt-val">{studentId}</span>
-            </div>
-            <div className="receipt-row">
-              <span className="receipt-label">শ্রেণি ও শিফট:</span>
-              <span className="receipt-val">{hold.className}</span>
-            </div>
-            <div className="receipt-row">
-              <span className="receipt-label">ভর্তি রেফারেন্স আইডি:</span>
-              <span className="receipt-val"><code>{hold.holdId}</code></span>
-            </div>
-            <div className="receipt-row">
-              <span className="receipt-label">ভর্তি অবস্থা:</span>
-              <span className="receipt-val" style={{ color: "var(--success)" }}>CONFIRMED</span>
-            </div>
+          <div>
+            {[
+              ["শিক্ষার্থী আইডি", studentId],
+              ["শ্রেণি ও শিফট", hold.className],
+              ["ভর্তি রেফারেন্স", hold.holdId],
+              ["ভর্তি অবস্থা", "CONFIRMED ✓"],
+            ].map(([label, val]) => (
+              <div key={label} className="receipt-row">
+                <span className="receipt-label">{label}:</span>
+                <span className="receipt-val">{val}</span>
+              </div>
+            ))}
           </div>
         </div>
         <div className="modal-footer">
           <button type="button" className="btn btn-secondary" onClick={onClose}>বন্ধ করুন</button>
-          <button type="button" className="btn btn-primary" onClick={() => window.print()}>
-            🖨️ প্রিন্ট করুন
-          </button>
+          <button type="button" className="btn btn-primary" onClick={() => window.print()}>🖨️ প্রিন্ট করুন</button>
         </div>
       </div>
     </div>
