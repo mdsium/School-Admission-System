@@ -17,6 +17,7 @@ Developed as part of the **Assistant Software Engineer Recruitment** take-home a
 | **UI Features** | Responsive Bangla & English UI, Real-time Countdown, Automatic Polling, Admission Slip Modal |
 | **Containerization** | Docker & Docker Compose |
 | **Storage** | PostgreSQL Persistent Volume |
+| **Youtube** | Demo video: https://youtu.be/JjJEB7GroOQ |
 
 ---
 
