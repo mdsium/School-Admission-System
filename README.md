@@ -24,8 +24,8 @@ Developed as part of the **Assistant Software Engineer Recruitment** take-home a
 
 | Feature | Parent (অভিভাবক) | Administrator (স্কুল অ্যাডমিন) |
 |---|---|---|
-| **Registration** | ✅ Public registration | ❌ Created through database seeding |
-| **Login** | ✅ Username/email and password | ✅ Secure admin login |
+| **Registration** |  | ❌ Created through database seeding |
+| **Login** |  | ✅ Secure admin login |
 | **Dashboard** | 🏠 Parent dashboard (applications and receipts) | 📊 Admin dashboard (KPIs and real-time statistics) |
 | **Manage Classes** | ❌ No permission | ✅ Create, edit, and configure seat quotas |
 | **Manage Shifts** | ❌ No permission | ✅ Create Morning, Day, and Evening shifts |
@@ -42,7 +42,7 @@ The initial administrator account is automatically created through database seed
 | Property | Value |
 |---|---|
 | **Username** | `admin` |
-| **Default Password** | `1234` |
+| **Default Password** | `1234` or `asdf` |
 | **Role** | `Admin` |
 
 ---
