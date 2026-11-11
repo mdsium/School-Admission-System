@@ -45,12 +45,6 @@ The initial administrator account is automatically created through database seed
 | **Default Password** | `1234` |
 | **Role** | `Admin` |
 
-### Security Policy
-
-- Passwords are stored as secure hashes using **PBKDF2-HMAC-SHA512**.
-- The administrator must change the default password after the first login.
-- The `mustChangePassword: true` policy enforces the mandatory password update.
-
 ---
 
 ## 🚀 Quick Start with Docker
@@ -250,26 +244,6 @@ All API endpoints communicate using JSON.
 | `GET` | `/api/auth/me` | Authenticated | Retrieve current user information |
 | `POST` | `/api/auth/change-password` | Authenticated | Change password and clear `mustChangePassword` |
 
-**Registration payload:**
-
-```json
-{
-  "fullName": "Parent Name",
-  "username": "parent123",
-  "email": "parent@example.com",
-  "password": "SecurePassword123"
-}
-```
-
-**Login payload:**
-
-```json
-{
-  "username": "admin",
-  "password": "1234"
-}
-```
-
 ### 2. Administrator Endpoints
 
 All administrator endpoints require authentication and the `Admin` role.
@@ -302,8 +276,6 @@ All administrator endpoints require authentication and the `Admin` role.
 | 7 | `GET` | `/me/holds` | `X-Student-Id` | Retrieve all student applications |
 
 **Important:** The parent admission flow uses a 17-digit birth registration number.
-
-**Note:** The parent-facing admission endpoints above reflect the documented admission contract. Class creation is handled through the administrator endpoints.
 
 ---
 
@@ -393,16 +365,6 @@ School-Admission-Management-System/
 - Add audit logs for administrator activities.
 - Introduce automated load testing for large-scale admission periods.
 - Add admission document uploads and verification.
-
----
-
-## 👨‍💻 Project Information
-
-**Project:** School Admission Management System  
-**Backend:** ASP.NET Core 8  
-**Frontend:** React 18 + TypeScript  
-**Database:** PostgreSQL 16
-
 ---
 
 **Developed with C#, ASP.NET Core, PostgreSQL, React, TypeScript, and Docker.**
