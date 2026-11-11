@@ -131,9 +131,9 @@ export default function App() {
                 <button className="btn btn-ghost btn-sm" style={{ color: "#94a3b8", border: "1px solid rgb(255 255 255 / 0.15)" }} onClick={() => setTab("login")}>
                    লগইন
                 </button>
-                <button className="btn btn-primary btn-sm" onClick={() => setTab("register")}>
+                {/* <button className="btn btn-primary btn-sm" onClick={() => setTab("register")}>
                   📝 রেজিস্ট্রেশন
-                </button>
+                </button> */}
               </>
             )}
           </div>
@@ -225,11 +225,11 @@ export default function App() {
                     🎓 আমার আবেদন
                     {myHoldsCount > 0 && <span className="tab-badge">{myHoldsCount}</span>}
                   </button>
-                  {!user && (
-                    <button className={`tab-btn ${tab === "admin-classes" ? "active" : ""}`} onClick={() => setTab("admin-classes")}>
+                  {/* {!user && (
+                    <button className={`tab-btn tab-btn--highlight ${tab === "admin-classes" ? "active" : ""}`} onClick={() => setTab("admin-classes")}>
                       ⚙️ Class তৈরি
                     </button>
-                  )}
+                  )} */}
                 </>
               )}
             </nav>
